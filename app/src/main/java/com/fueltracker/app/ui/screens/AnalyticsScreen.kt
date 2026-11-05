@@ -157,20 +157,20 @@ fun AnalyticsScreen(
                     value = if (minConsumption != null) "$minConsumption L/100km" else "--",
                     valueColor = Color(0xFF059669)
                 )
-                Divider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
 
                 StatRow(
                     label = "最高单箱油耗",
                     value = if (maxConsumption != null) "$maxConsumption L/100km" else "--",
                     valueColor = Color(0xFFF59E0B)
                 )
-                Divider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
 
                 StatRow(
                     label = "平均加油单价",
                     value = if (avgPrice > 0) "¥${String.format("%.2f", avgPrice)} / L" else "--"
                 )
-                Divider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
 
                 StatRow(
                     label = "平均每箱行驶里程",

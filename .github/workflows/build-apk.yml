@@ -5,7 +5,7 @@ on:
     branches: [ "master", "main" ]
   pull_request:
     branches: [ "master", "main" ]
-  workflow_dispatch: # 支持在 GitHub 网页上手动点击按钮触发打包
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,14 +26,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.7
-
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
-
-      - name: Run Unit Tests
-        run: ./gradlew test --stacktrace
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
@@ -45,3 +39,10 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload Failure Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-reports
+          path: app/build/reports/

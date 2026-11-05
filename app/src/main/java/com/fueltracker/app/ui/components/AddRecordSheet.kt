@@ -237,7 +237,7 @@ fun AddRecordSheet(
                         )
                     }
 
-                    Divider(
+                    HorizontalDivider(
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                     )

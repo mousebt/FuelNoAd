@@ -14,10 +14,10 @@ import com.fueltracker.app.ui.components.AddRecordSheet
 import com.fueltracker.app.ui.viewmodel.FuelViewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
-    object Dashboard : Screen("dashboard", "仪表盘", Icons.Default.Dashboard)
-    object History : Screen("history", "记录", Icons.Default.FormatListBulleted)
-    object Analytics : Screen("analytics", "统计", Icons.Default.BarChart)
-    object Settings : Screen("settings", "车辆", Icons.Default.DirectionsCar)
+    object Dashboard : Screen("dashboard", "仪表盘", Icons.Default.Home)
+    object History : Screen("history", "记录", Icons.Default.List)
+    object Analytics : Screen("analytics", "统计", Icons.Default.Info)
+    object Settings : Screen("settings", "车辆", Icons.Default.Settings)
 }
 
 @Composable
