@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fueltracker.app.ui.components.AddRecordSheet
 import com.fueltracker.app.ui.viewmodel.FuelViewModel
 
@@ -27,10 +26,10 @@ fun MainScreen(
     var currentTab by remember { mutableStateOf<Screen>(Screen.Dashboard) }
     var showAddSheet by remember { mutableStateOf(false) }
 
-    val vehicles by viewModel.vehicles.collectAsStateWithLifecycle()
-    val selectedVehicleId by viewModel.selectedVehicleId.collectAsStateWithLifecycle()
-    val records by viewModel.currentRecords.collectAsStateWithLifecycle()
-    val stats by viewModel.dashboardStats.collectAsStateWithLifecycle()
+    val vehicles by viewModel.vehicles.collectAsState()
+    val selectedVehicleId by viewModel.selectedVehicleId.collectAsState()
+    val records by viewModel.currentRecords.collectAsState()
+    val stats by viewModel.dashboardStats.collectAsState()
 
     val navItems = listOf(
         Screen.Dashboard,
