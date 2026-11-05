@@ -62,7 +62,7 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            viewModel.importBackup(context, uri, isJson = true) { success, msg ->
+            viewModel.importBackup(context, uri) { success, msg ->
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }
         }
@@ -135,12 +135,12 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                    onClick = { importLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "application/json", "*/*")) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Text("从 JSON 备份文件恢复数据", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("从 CSV / JSON 文件导入数据", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

@@ -128,7 +128,8 @@ class FuelViewModel(
         }
     }
 
-    fun importBackup(context: Context, uri: Uri, isJson: Boolean, onResult: (Boolean, String) -> Unit) {
+    fun importBackup(context: Context, uri: Uri, onResult: (Boolean, String) -> Unit) {
+        val vehicleId = _selectedVehicleId.value ?: 1L
         viewModelScope.launch {
             try {
                 val readResult = DataBackupManager.readFromUri(context, uri)
@@ -136,14 +137,20 @@ class FuelViewModel(
                     onResult(false, readResult.exceptionOrNull()?.message ?: "读取文件失败")
                     return@launch
                 }
-                val content = readResult.getOrThrow()
-                if (isJson) {
-                    val parsed = DataBackupManager.importFromJson(content)
-                    repository.restoreAllRecords(parsed)
-                    onResult(true, "成功恢复 ${parsed.size} 条记录！")
+                val content = readResult.getOrThrow().trim()
+                val parsed = if (content.startsWith("[") || content.startsWith("{")) {
+                    DataBackupManager.importFromJson(content)
                 } else {
-                    onResult(false, "暂仅支持从 JSON 完整备份文件直接恢复数据")
+                    DataBackupManager.importFromCsv(content, vehicleId)
                 }
+
+                if (parsed.isEmpty()) {
+                    onResult(false, "未能解析到有效的加油记录")
+                    return@launch
+                }
+
+                repository.restoreAllRecords(parsed)
+                onResult(true, "成功导入 ${parsed.size} 条记录！")
             } catch (e: Exception) {
                 onResult(false, "解析备份文件失败: ${e.localizedMessage}")
             }

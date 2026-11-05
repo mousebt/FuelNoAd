@@ -38,6 +38,71 @@ object DataBackupManager {
     }
 
     /**
+     * Parses records from standard CSV string
+     */
+    fun importFromCsv(csvText: String, vehicleId: Long = 1L): List<FuelRecord> {
+        val lines = csvText.lines().map { it.trim() }.filter { it.isNotBlank() }
+        if (lines.isEmpty()) return emptyList()
+
+        val records = mutableListOf<FuelRecord>()
+        val dataLines = if (lines.first().contains("时间") || lines.first().contains("里程")) {
+            lines.drop(1)
+        } else {
+            lines
+        }
+
+        val fallbackFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+        for (line in dataLines) {
+            val parts = line.split(",").map { it.trim() }
+            if (parts.size < 5) continue
+
+            try {
+                val dateStr = parts[0]
+                val timestamp = try {
+                    dateFormat.parse(dateStr)?.time
+                        ?: fallbackFormat.parse(dateStr)?.time
+                        ?: System.currentTimeMillis()
+                } catch (e: Exception) {
+                    System.currentTimeMillis()
+                }
+
+                val odometer = parts[1].toDoubleOrNull() ?: continue
+                val fuelAmount = parts[2].toDoubleOrNull() ?: continue
+                val unitPrice = parts[3].toDoubleOrNull() ?: continue
+                val totalPrice = parts[4].toDoubleOrNull() ?: (fuelAmount * unitPrice)
+
+                val fuelType = if (parts.size > 5 && parts[5].isNotBlank()) parts[5] else "92#"
+                val isFull = if (parts.size > 6) parts[6] == "是" || parts[6].contains("加满") else true
+                val isMissed = if (parts.size > 7) parts[7] == "是" else false
+
+                val station = if (parts.size > 10 && parts[10].isNotBlank()) parts[10] else null
+                val note = if (parts.size > 11 && parts[11].isNotBlank()) parts[11] else null
+
+                records.add(
+                    FuelRecord(
+                        vehicleId = vehicleId,
+                        timestamp = timestamp,
+                        odometer = odometer,
+                        fuelAmount = fuelAmount,
+                        unitPrice = unitPrice,
+                        totalPrice = totalPrice,
+                        fuelType = fuelType,
+                        isFull = isFull,
+                        isMissedPrevious = isMissed,
+                        stationName = station,
+                        note = note
+                    )
+                )
+            } catch (_: Exception) {
+                // skip malformed line
+            }
+        }
+
+        return records
+    }
+
+    /**
      * Exports records to standard CSV format
      */
     fun exportToCsv(records: List<FuelRecord>): String {
