@@ -26,6 +26,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -532,36 +534,48 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Zoom buttons
+                    // Zoom buttons (Clean text & icon without circular bubble background)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text("缩放", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        IconButton(
-                            onClick = { barZoomLevel = (barZoomLevel - 0.25f).coerceAtLeast(0.5f) },
+                        Text(
+                            text = "缩放",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                        Box(
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                .size(22.dp)
+                                .clickable { barZoomLevel = (barZoomLevel - 0.25f).coerceAtLeast(0.5f) },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(imageVector = Icons.Default.Remove, contentDescription = "缩小", modifier = Modifier.size(14.dp))
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "缩小",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
                         }
                         Text(
                             text = "${(barZoomLevel * 100).roundToInt()}%",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
-                        IconButton(
-                            onClick = { barZoomLevel = (barZoomLevel + 0.25f).coerceAtMost(3.0f) },
+                        Box(
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                .size(22.dp)
+                                .clickable { barZoomLevel = (barZoomLevel + 0.25f).coerceAtMost(3.0f) },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "放大", modifier = Modifier.size(14.dp))
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "放大",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
                         }
                     }
                 }
@@ -625,13 +639,12 @@ fun AnalyticsScreen(
                         Text(text = "暂无月度数据", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     }
                 } else {
-                    val maxCost = (monthlyList.maxOf { it.totalCost } * 1.15).coerceAtLeast(1000.0)
-                    val baseSlotWidth = 60.dp
+                    val maxCost = (monthlyList.maxOf { it.totalCost } * 1.25).coerceAtLeast(800.0)
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(170.dp)
+                            .height(175.dp)
                     ) {
                         Canvas(
                             modifier = Modifier
@@ -639,12 +652,14 @@ fun AnalyticsScreen(
                                 .pointerInput(monthlyList, barZoomLevel) {
                                     detectTapGestures { tapOffset ->
                                         val viewportW = size.width.toFloat()
-                                        val slotW = 55.dp.toPx() * barZoomLevel
-                                        val totalW = monthlyList.size * slotW + 2 * 20.dp.toPx()
+                                        val slotW = 52.dp.toPx() * barZoomLevel
+                                        val paddingLeft = 36.dp.toPx()
+                                        val paddingRight = 16.dp.toPx()
+                                        val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                         val currentOffset = barScrollOffset.coerceIn(-maxScroll, 0f)
 
-                                        val tappedIdx = ((tapOffset.x - currentOffset - 20.dp.toPx()) / slotW).toInt()
+                                        val tappedIdx = ((tapOffset.x - currentOffset - paddingLeft) / slotW).toInt()
                                         if (tappedIdx in monthlyList.indices) {
                                             selectedMonthItem = monthlyList[tappedIdx]
                                         }
@@ -653,8 +668,10 @@ fun AnalyticsScreen(
                                 .pointerInput(monthlyList, barZoomLevel) {
                                     detectHorizontalDragGestures { _, dragAmount ->
                                         val viewportW = size.width.toFloat()
-                                        val slotW = 55.dp.toPx() * barZoomLevel
-                                        val totalW = monthlyList.size * slotW + 2 * 20.dp.toPx()
+                                        val slotW = 52.dp.toPx() * barZoomLevel
+                                        val paddingLeft = 36.dp.toPx()
+                                        val paddingRight = 16.dp.toPx()
+                                        val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                         barScrollOffset = (barScrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
                                     }
@@ -663,56 +680,141 @@ fun AnalyticsScreen(
                             val width = size.width
                             val height = size.height
 
-                            val paddingTop = 15f
-                            val paddingBottom = 30f
+                            val paddingTop = 24f
+                            val paddingBottom = 26f
                             val graphHeight = height - paddingTop - paddingBottom
-                            val slotW = 55.dp.toPx() * barZoomLevel
-                            val barW = (slotW * 0.55f).coerceIn(16f, 48f)
-                            val paddingSide = 20.dp.toPx()
+                            val slotW = 52.dp.toPx() * barZoomLevel
+                            val barW = (slotW * 0.48f).coerceIn(16f, 38f)
+                            val paddingLeft = 36.dp.toPx()
+                            val paddingRight = 16.dp.toPx()
 
-                            val totalW = monthlyList.size * slotW + 2 * paddingSide
+                            val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                             val maxScroll = (totalW - width).coerceAtLeast(0f)
                             if (barScrollOffset < -maxScroll) barScrollOffset = -maxScroll
                             if (barScrollOffset > 0f) barScrollOffset = 0f
 
                             val currentOffset = barScrollOffset
 
-                            // 1. Draw Average Monthly Line across chart
+                            val yAxisPaint = android.graphics.Paint().apply {
+                                color = android.graphics.Color.GRAY
+                                textSize = 20f
+                                textAlign = android.graphics.Paint.Align.RIGHT
+                                isAntiAlias = true
+                            }
+
+                            // 1. Draw Horizontal Dotted Grid Lines and Y-Axis Values
+                            val gridSteps = 3
+                            drawIntoCanvas { canvas ->
+                                for (s in 0..gridSteps) {
+                                    val y = paddingTop + (graphHeight / gridSteps) * s
+                                    val scaleVal = maxCost - (s.toFloat() / gridSteps) * maxCost
+
+                                    drawLine(
+                                        color = Color.LightGray.copy(alpha = 0.35f),
+                                        start = Offset(paddingLeft - 4f, y),
+                                        end = Offset(width, y),
+                                        strokeWidth = 1.5f,
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                                    )
+
+                                    canvas.nativeCanvas.drawText(
+                                        scaleVal.roundToInt().toString(),
+                                        paddingLeft - 6f,
+                                        y + 7f,
+                                        yAxisPaint
+                                    )
+                                }
+                            }
+
+                            // 2. Draw Average dashed line across chart
                             if (avgMonthlyExpense > 0) {
                                 val avgRatio = (avgMonthlyExpense / maxCost).toFloat().coerceIn(0f, 1f)
                                 val avgY = paddingTop + graphHeight - (avgRatio * graphHeight)
                                 drawLine(
-                                    color = Color(0xFFF59E0B).copy(alpha = 0.7f),
-                                    start = Offset(0f, avgY),
+                                    color = Color(0xFFF59E0B).copy(alpha = 0.85f),
+                                    start = Offset(paddingLeft - 4f, avgY),
                                     end = Offset(width, avgY),
-                                    strokeWidth = 2.5f,
-                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                                    strokeWidth = 2f,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
                                 )
+
+                                val avgPaint = android.graphics.Paint().apply {
+                                    color = android.graphics.Color.parseColor("#D97706")
+                                    textSize = 21f
+                                    textAlign = android.graphics.Paint.Align.RIGHT
+                                    isAntiAlias = true
+                                    isFakeBoldText = true
+                                }
+                                drawIntoCanvas { canvas ->
+                                    canvas.nativeCanvas.drawText(
+                                        "月均 ¥${avgMonthlyExpense.roundToInt()}",
+                                        width - 8f,
+                                        avgY - 6f,
+                                        avgPaint
+                                    )
+                                }
                             }
 
-                            // 2. Draw Bars & Month Labels
+                            // 3. Draw Bars, Top Amounts, and Bottom Month Labels
+                            val textPaint = android.graphics.Paint().apply {
+                                color = android.graphics.Color.DKGRAY
+                                textSize = 20f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                                isFakeBoldText = true
+                            }
+
+                            val labelPaint = android.graphics.Paint().apply {
+                                color = android.graphics.Color.GRAY
+                                textSize = 20f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                            }
+
                             monthlyList.forEachIndexed { i, item ->
-                                val centerX = paddingSide + i * slotW + (slotW / 2) + currentOffset
+                                val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
                                 if (centerX >= -barW && centerX <= width + barW) {
                                     val isSelected = (selectedMonthItem == item) || (selectedMonthItem == null && i == monthlyList.size - 1)
                                     val barH = ((item.totalCost / maxCost) * graphHeight).toFloat().coerceAtLeast(6f)
                                     val topY = paddingTop + graphHeight - barH
 
-                                    val barColor = if (isSelected) Color(0xFF10B981) else Color(0xFF10B981).copy(alpha = 0.40f)
+                                    val barColor = if (isSelected) Color(0xFF10B981) else Color(0xFF10B981).copy(alpha = 0.45f)
 
                                     drawRoundRect(
                                         color = barColor,
                                         topLeft = Offset(centerX - barW / 2, topY),
                                         size = Size(barW, barH),
-                                        cornerRadius = CornerRadius(8f, 8f)
+                                        cornerRadius = CornerRadius(6f, 6f)
                                     )
+
+                                    drawIntoCanvas { canvas ->
+                                        // Amount on top of each bar
+                                        canvas.nativeCanvas.drawText(
+                                            item.totalCost.roundToInt().toString(),
+                                            centerX,
+                                            topY - 6f,
+                                            textPaint
+                                        )
+
+                                        // Month label below each bar (X-axis)
+                                        val monthNum = try { item.key.substring(5).toInt() } catch (_: Exception) { 1 }
+                                        val yearStr = try { item.key.substring(2, 4) } catch (_: Exception) { "" }
+                                        val monthLabel = if (monthNum == 1 || i == 0) "${yearStr}年${monthNum}月" else "${monthNum}月"
+
+                                        canvas.nativeCanvas.drawText(
+                                            monthLabel,
+                                            centerX,
+                                            height - 6f,
+                                            labelPaint
+                                        )
+                                    }
 
                                     if (isSelected) {
                                         // Indicator dot below selected bar
                                         drawCircle(
                                             color = Color(0xFF059669),
-                                            radius = 4f,
-                                            center = Offset(centerX, height - 6f)
+                                            radius = 3.5f,
+                                            center = Offset(centerX, height - 1f)
                                         )
                                     }
                                 }

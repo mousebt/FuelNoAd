@@ -202,16 +202,18 @@ fun FuelTrendChart(
                     // Clean Zoom controls (No circular bubble background)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "缩放:",
+                            text = "缩放",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
-                        IconButton(
-                            onClick = { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.5f) },
-                            modifier = Modifier.size(24.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clickable { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.5f) },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Remove,
@@ -220,9 +222,18 @@ fun FuelTrendChart(
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                         }
-                        IconButton(
-                            onClick = { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3.0f) },
-                            modifier = Modifier.size(24.dp)
+                        Text(
+                            text = "${(zoomLevel * 100).toInt()}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clickable { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3.0f) },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,

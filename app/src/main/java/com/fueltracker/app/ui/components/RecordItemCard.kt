@@ -58,6 +58,8 @@ fun RecordItemCard(
                         text = dateFormat.format(Date(record.timestamp)),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -73,11 +75,13 @@ fun RecordItemCard(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
                             fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            softWrap = false,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
 
-                    // Consumption or Status Badge
+                    // Consumption or Status Badge (all in one line, no /100km)
                     if (record.calculatedConsumption != null) {
                         Box(
                             modifier = Modifier
@@ -86,9 +90,11 @@ fun RecordItemCard(
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "${record.calculatedConsumption} L/100km",
+                                text = "${record.calculatedConsumption} L",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 color = Color(0xFF059669)
                             )
                         }
@@ -103,6 +109,8 @@ fun RecordItemCard(
                                 text = "未加满·待统算",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false,
                                 color = Color(0xFFD97706)
                             )
                         }
@@ -116,6 +124,8 @@ fun RecordItemCard(
                             Text(
                                 text = "基准记录",
                                 fontSize = 10.sp,
+                                maxLines = 1,
+                                softWrap = false,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
