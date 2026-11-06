@@ -41,6 +41,12 @@ fun SettingsScreen(
     var vehicleToEdit by remember { mutableStateOf<Vehicle?>(null) }
     var vehicleToDelete by remember { mutableStateOf<Vehicle?>(null) }
 
+    val coroutineScope = rememberCoroutineScope()
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateInfoToShow by remember { mutableStateOf<com.fueltracker.app.data.update.UpdateInfo?>(null) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+
     // SAF Launchers for Export and Import
     val exportJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -313,17 +319,13 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "当前软件版本",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(Color(0xFF10B981).copy(alpha = 0.12f))
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
-                    ) {
+                    Column {
+                        Text(
+                            text = "当前软件版本",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "v${com.fueltracker.app.BuildConfig.VERSION_NAME} (Build ${com.fueltracker.app.BuildConfig.VERSION_CODE})",
                             fontSize = 12.sp,
@@ -331,6 +333,37 @@ fun SettingsScreen(
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                             color = Color(0xFF059669)
                         )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            isCheckingUpdate = true
+                            coroutineScope.launch {
+                                val result = com.fueltracker.app.data.update.AppUpdateManager.checkForUpdates()
+                                isCheckingUpdate = false
+                                if (result.isSuccess) {
+                                    val info = result.getOrThrow()
+                                    if (info.hasUpdate) {
+                                        updateInfoToShow = info
+                                    } else {
+                                        Toast.makeText(context, "🎉 当前已是最新版本 (v${com.fueltracker.app.BuildConfig.VERSION_NAME})！", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, result.exceptionOrNull()?.message ?: "检查更新失败", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = !isCheckingUpdate,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        if (isCheckingUpdate) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color(0xFF10B981))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("检查中...", fontSize = 11.sp)
+                        } else {
+                            Text("检查更新 🔄", fontSize = 11.sp, color = Color(0xFF059669))
+                        }
                     }
                 }
 
@@ -441,6 +474,120 @@ fun SettingsScreen(
                 if (vehicles.size > 1) {
                     TextButton(onClick = { vehicleToDelete = null }) {
                         Text("取消")
+                    }
+                }
+            }
+        )
+    }
+
+    // New Version Available Dialog
+    if (updateInfoToShow != null) {
+        val info = updateInfoToShow!!
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDownloading) updateInfoToShow = null
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🚀 发现新版本 ", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = info.latestVersionName,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF059669)
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = info.releaseTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 180.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
+                            .padding(10.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = info.releaseNotes.ifBlank { "优化已知问题，提升使用体验。" },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                        )
+                    }
+
+                    if (isDownloading) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("正在下载更新包...", fontSize = 11.sp, color = Color(0xFF059669))
+                                Text("${(downloadProgress * 100).toInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { downloadProgress },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color(0xFF10B981)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (!isDownloading) {
+                    Button(
+                        onClick = {
+                            val downloadUrl = info.downloadUrl
+                            if (downloadUrl != null) {
+                                isDownloading = true
+                                downloadProgress = 0f
+                                coroutineScope.launch {
+                                    val result = com.fueltracker.app.data.update.AppUpdateManager.downloadApk(
+                                        context = context,
+                                        downloadUrl = downloadUrl,
+                                        fileName = "FuelTracker-${info.latestVersionName}.apk",
+                                        onProgress = { p -> downloadProgress = p }
+                                    )
+                                    isDownloading = false
+                                    if (result.isSuccess) {
+                                        updateInfoToShow = null
+                                        com.fueltracker.app.data.update.AppUpdateManager.installApk(context, result.getOrThrow())
+                                    } else {
+                                        Toast.makeText(context, "下载失败，已为您打开浏览器下载", Toast.LENGTH_LONG).show()
+                                        com.fueltracker.app.data.update.AppUpdateManager.openInBrowser(context, downloadUrl)
+                                    }
+                                }
+                            } else {
+                                com.fueltracker.app.data.update.AppUpdateManager.openInBrowser(context, info.releasePageUrl)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        Text("立即更新")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isDownloading) {
+                    Row {
+                        TextButton(
+                            onClick = {
+                                com.fueltracker.app.data.update.AppUpdateManager.openInBrowser(context, info.releasePageUrl)
+                            }
+                        ) {
+                            Text("网页下载")
+                        }
+                        TextButton(onClick = { updateInfoToShow = null }) {
+                            Text("稍后再说")
+                        }
                     }
                 }
             }
