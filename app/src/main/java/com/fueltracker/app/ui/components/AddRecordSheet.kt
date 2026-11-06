@@ -19,11 +19,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fueltracker.app.model.FuelRecord
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddRecordSheet(
     lastRecord: FuelRecord?,
+    initialRecord: FuelRecord? = null,
     onDismiss: () -> Unit,
     onSave: (
         odometer: Double,
@@ -34,33 +38,59 @@ fun AddRecordSheet(
         isFull: Boolean,
         isMissedPrevious: Boolean,
         stationName: String?,
-        note: String?
+        note: String?,
+        id: Long,
+        timestamp: Long
     ) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isEditing = initialRecord != null
 
     val lastOdo = lastRecord?.odometer ?: 10000.0
-    val suggestedOdo = (lastOdo + 450.0).toLong().toString()
+    val defaultNewOdo = (lastOdo + 450.0).toLong().toString()
 
-    var odometerText by remember { mutableStateOf(suggestedOdo) }
-    var volumeText by remember { mutableStateOf("42.0") }
-    var unitPriceText by remember { mutableStateOf("8.15") }
-    var totalPriceText by remember { mutableStateOf("342.30") }
+    var odometerText by remember {
+        mutableStateOf(if (isEditing) initialRecord!!.odometer.toLong().toString() else defaultNewOdo)
+    }
+    var volumeText by remember {
+        mutableStateOf(if (isEditing) initialRecord!!.fuelAmount.toString() else "42.0")
+    }
+    var unitPriceText by remember {
+        mutableStateOf(if (isEditing) initialRecord!!.unitPrice.toString() else "8.15")
+    }
+    var totalPriceText by remember {
+        mutableStateOf(if (isEditing) String.format(Locale.US, "%.2f", initialRecord!!.totalPrice) else "342.30")
+    }
 
-    var selectedFuelType by remember { mutableStateOf("95#") }
-    var isFull by remember { mutableStateOf(true) }
-    var isMissedPrevious by remember { mutableStateOf(false) }
+    var selectedFuelType by remember {
+        mutableStateOf(if (isEditing) initialRecord!!.fuelType else "95#")
+    }
+    var isFull by remember {
+        mutableStateOf(if (isEditing) initialRecord!!.isFull else true)
+    }
+    var isMissedPrevious by remember {
+        mutableStateOf(if (isEditing) initialRecord!!.isMissedPrevious else false)
+    }
 
-    var stationName by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var stationName by remember {
+        mutableStateOf(if (isEditing) (initialRecord!!.stationName ?: "") else "")
+    }
+    var note by remember {
+        mutableStateOf(if (isEditing) (initialRecord!!.note ?: "") else "")
+    }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+    val recordTimestamp = remember { initialRecord?.timestamp ?: System.currentTimeMillis() }
 
     // Auto-update total price when volume or unit price changes
     fun recalculateTotal() {
         val vol = volumeText.toDoubleOrNull() ?: 0.0
         val price = unitPriceText.toDoubleOrNull() ?: 0.0
-        totalPriceText = String.format("%.2f", vol * price)
+        if (vol > 0 && price > 0) {
+            totalPriceText = String.format(Locale.US, "%.2f", vol * price)
+        }
     }
 
     ModalBottomSheet(
@@ -80,11 +110,20 @@ fun AddRecordSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "记一笔加油",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Column {
+                    Text(
+                        text = if (isEditing) "修改加油记录" else "记一笔加油",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (isEditing) {
+                        Text(
+                            text = "时间: ${dateFormat.format(Date(recordTimestamp))}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
 
                 TextButton(onClick = onDismiss) {
                     Text("取消", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
@@ -106,10 +145,17 @@ fun AddRecordSheet(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 supportingText = {
-                    Text(
-                        text = "上次记录: ${lastOdo.toLong()} km",
-                        color = Color(0xFF059669)
-                    )
+                    if (isEditing) {
+                        Text(
+                            text = "原里程: ${initialRecord!!.odometer.toLong()} km",
+                            color = Color(0xFF059669)
+                        )
+                    } else if (lastRecord != null) {
+                        Text(
+                            text = "上次记录: ${lastOdo.toLong()} km",
+                            color = Color(0xFF059669)
+                        )
+                    }
                 }
             )
 
@@ -311,7 +357,7 @@ fun AddRecordSheet(
                         errorMessage = "请输入有效的仪表盘里程"
                         return@Button
                     }
-                    if (odo <= lastOdo) {
+                    if (!isEditing && lastRecord != null && odo <= lastOdo) {
                         errorMessage = "当前里程 (${odo.toLong()}km) 必须大于上一笔里程 (${lastOdo.toLong()}km)"
                         return@Button
                     }
@@ -325,7 +371,19 @@ fun AddRecordSheet(
                     }
                     val finalTotal = total ?: (vol * price)
 
-                    onSave(odo, vol, price, finalTotal, selectedFuelType, isFull, isMissedPrevious, stationName, note)
+                    onSave(
+                        odo,
+                        vol,
+                        price,
+                        finalTotal,
+                        selectedFuelType,
+                        isFull,
+                        isMissedPrevious,
+                        stationName,
+                        note,
+                        initialRecord?.id ?: 0L,
+                        recordTimestamp
+                    )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -336,7 +394,7 @@ fun AddRecordSheet(
                 )
             ) {
                 Text(
-                    text = "保存记录",
+                    text = if (isEditing) "保存修改" else "保存记录",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

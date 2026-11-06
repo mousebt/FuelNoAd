@@ -63,13 +63,16 @@ class FuelViewModel(
         isFull: Boolean,
         isMissedPrevious: Boolean,
         stationName: String? = null,
-        note: String? = null
+        note: String? = null,
+        id: Long = 0L,
+        timestamp: Long = System.currentTimeMillis()
     ) {
         val vehicleId = _selectedVehicleId.value ?: return
         viewModelScope.launch {
             val record = FuelRecord(
+                id = id,
                 vehicleId = vehicleId,
-                timestamp = System.currentTimeMillis(),
+                timestamp = timestamp,
                 odometer = odometer,
                 fuelAmount = fuelAmount,
                 unitPrice = unitPrice,
@@ -104,6 +107,31 @@ class FuelViewModel(
                 )
             )
             _selectedVehicleId.value = newId
+        }
+    }
+
+    fun updateVehicle(vehicle: Vehicle) {
+        viewModelScope.launch {
+            repository.updateVehicle(vehicle)
+        }
+    }
+
+    fun deleteVehicle(vehicle: Vehicle) {
+        viewModelScope.launch {
+            repository.deleteVehicle(vehicle)
+            val remaining = vehicles.value.filter { it.id != vehicle.id }
+            if (remaining.isNotEmpty()) {
+                _selectedVehicleId.value = remaining.first().id
+            } else {
+                _selectedVehicleId.value = null
+            }
+        }
+    }
+
+    fun setDefaultVehicle(vehicleId: Long) {
+        viewModelScope.launch {
+            repository.setDefaultVehicle(vehicleId)
+            _selectedVehicleId.value = vehicleId
         }
     }
 

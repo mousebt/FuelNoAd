@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.fueltracker.app.model.FuelRecord
 import com.fueltracker.app.ui.components.AddRecordSheet
 import com.fueltracker.app.ui.viewmodel.FuelViewModel
 
@@ -25,6 +26,7 @@ fun MainScreen(
 ) {
     var currentTab by remember { mutableStateOf<Screen>(Screen.Dashboard) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var editingRecord by remember { mutableStateOf<FuelRecord?>(null) }
 
     val vehicles by viewModel.vehicles.collectAsState()
     val selectedVehicleId by viewModel.selectedVehicleId.collectAsState()
@@ -63,7 +65,10 @@ fun MainScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddSheet = true },
+                onClick = {
+                    editingRecord = null
+                    showAddSheet = true
+                },
                 containerColor = Color(0xFF10B981),
                 contentColor = Color.White
             ) {
@@ -81,6 +86,10 @@ fun MainScreen(
                     stats = stats,
                     records = records,
                     onSelectVehicle = { viewModel.selectVehicle(it) },
+                    onEditRecord = { record ->
+                        editingRecord = record
+                        showAddSheet = true
+                    },
                     onDeleteRecord = { viewModel.deleteRecord(it) },
                     onNavigateToHistory = { currentTab = Screen.History },
                     modifier = screenModifier
@@ -89,6 +98,10 @@ fun MainScreen(
             Screen.History -> {
                 HistoryScreen(
                     records = records,
+                    onEditRecord = { record ->
+                        editingRecord = record
+                        showAddSheet = true
+                    },
                     onDeleteRecord = { viewModel.deleteRecord(it) },
                     modifier = screenModifier
                 )
@@ -113,10 +126,27 @@ fun MainScreen(
         if (showAddSheet) {
             AddRecordSheet(
                 lastRecord = records.lastOrNull(),
-                onDismiss = { showAddSheet = false },
-                onSave = { odo, vol, price, total, type, isFull, isMissed, station, note ->
-                    viewModel.saveRecord(odo, vol, price, total, type, isFull, isMissed, station, note)
+                initialRecord = editingRecord,
+                onDismiss = {
                     showAddSheet = false
+                    editingRecord = null
+                },
+                onSave = { odo, vol, price, total, type, isFull, isMissed, station, note, id, timestamp ->
+                    viewModel.saveRecord(
+                        odometer = odo,
+                        fuelAmount = vol,
+                        unitPrice = price,
+                        totalPrice = total,
+                        fuelType = type,
+                        isFull = isFull,
+                        isMissedPrevious = isMissed,
+                        stationName = station,
+                        note = note,
+                        id = id,
+                        timestamp = timestamp
+                    )
+                    showAddSheet = false
+                    editingRecord = null
                 }
             )
         }

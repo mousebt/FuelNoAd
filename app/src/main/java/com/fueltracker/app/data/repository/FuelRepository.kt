@@ -32,6 +32,7 @@ class FuelRepository(
     }
 
     suspend fun deleteVehicle(vehicle: Vehicle) {
+        fuelRecordDao.deleteRecordsByVehicle(vehicle.id)
         vehicleDao.deleteVehicle(VehicleEntity.fromModel(vehicle))
     }
 

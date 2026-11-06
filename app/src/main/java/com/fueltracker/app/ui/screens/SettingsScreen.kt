@@ -13,6 +13,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +38,8 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showAddVehicleDialog by remember { mutableStateOf(false) }
+    var vehicleToEdit by remember { mutableStateOf<Vehicle?>(null) }
+    var vehicleToDelete by remember { mutableStateOf<Vehicle?>(null) }
 
     // SAF Launchers for Export and Import
     val exportJsonLauncher = rememberLauncherForActivityResult(
@@ -159,7 +163,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "我的车库",
+                        text = "我的车库 (${vehicles.size} 辆)",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -198,32 +202,64 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = v.name,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (isSelected) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(50))
+                                                .background(Color(0xFF10B981))
+                                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "使用中",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = v.name,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "${v.plateNumber.ifBlank { "无车牌" }} · ${v.fuelType} · 油箱 ${v.tankCapacity.toInt()}L",
+                                    text = "${v.plateNumber.ifBlank { "无车牌" }} · ${v.fuelType} · 油箱 ${v.tankCapacity.toInt()}L · 初始 ${v.initialMileage.toLong()}km",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                             }
 
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(Color(0xFF10B981))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = { vehicleToEdit = v },
+                                    modifier = Modifier.size(32.dp)
                                 ) {
-                                    Text(
-                                        text = "使用中",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "修改车辆",
+                                        tint = Color(0xFF059669),
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { vehicleToDelete = v },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "删除车辆",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
@@ -234,8 +270,16 @@ fun SettingsScreen(
         }
     }
 
+    // Add Vehicle Dialog
     if (showAddVehicleDialog) {
-        AddVehicleDialog(
+        VehicleFormDialog(
+            title = "添加新车辆",
+            initialName = "",
+            initialPlate = "",
+            initialFuelType = "95#",
+            initialCapacity = 50f,
+            initialMileage = 0.0,
+            confirmButtonText = "确定添加",
             onDismiss = { showAddVehicleDialog = false },
             onConfirm = { name, plate, type, capacity, initialMileage ->
                 viewModel.addVehicle(name, plate, type, capacity, initialMileage)
@@ -243,55 +287,137 @@ fun SettingsScreen(
             }
         )
     }
+
+    // Edit Vehicle Dialog
+    if (vehicleToEdit != null) {
+        val target = vehicleToEdit!!
+        VehicleFormDialog(
+            title = "修改车辆信息",
+            initialName = target.name,
+            initialPlate = target.plateNumber,
+            initialFuelType = target.fuelType,
+            initialCapacity = target.tankCapacity,
+            initialMileage = target.initialMileage,
+            confirmButtonText = "保存修改",
+            onDismiss = { vehicleToEdit = null },
+            onConfirm = { name, plate, type, capacity, initialMileage ->
+                val updated = target.copy(
+                    name = name,
+                    plateNumber = plate,
+                    fuelType = type,
+                    tankCapacity = capacity,
+                    initialMileage = initialMileage
+                )
+                viewModel.updateVehicle(updated)
+                vehicleToEdit = null
+                Toast.makeText(context, "车辆信息修改成功", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // Delete Vehicle Confirmation Dialog
+    if (vehicleToDelete != null) {
+        val target = vehicleToDelete!!
+        AlertDialog(
+            onDismissRequest = { vehicleToDelete = null },
+            title = {
+                Text("删除车辆", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                if (vehicles.size <= 1) {
+                    Text("当前仅剩一辆车辆，无法删除！如需更换车辆，请先添加新车辆后再执行删除。")
+                } else {
+                    Text("确定要删除车辆【${target.name}】（${target.plateNumber.ifBlank { "无车牌" }}）吗？\n\n⚠️ 警告：该操作将同时清空该车辆下的所有历史加油记录，且不可撤销！")
+                }
+            },
+            confirmButton = {
+                if (vehicles.size > 1) {
+                    Button(
+                        onClick = {
+                            viewModel.deleteVehicle(target)
+                            vehicleToDelete = null
+                            Toast.makeText(context, "车辆已删除", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("确定删除", color = Color.White)
+                    }
+                } else {
+                    Button(onClick = { vehicleToDelete = null }) {
+                        Text("知道了")
+                    }
+                }
+            },
+            dismissButton = {
+                if (vehicles.size > 1) {
+                    TextButton(onClick = { vehicleToDelete = null }) {
+                        Text("取消")
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun AddVehicleDialog(
+private fun VehicleFormDialog(
+    title: String,
+    initialName: String,
+    initialPlate: String,
+    initialFuelType: String,
+    initialCapacity: Float,
+    initialMileage: Double,
+    confirmButtonText: String,
     onDismiss: () -> Unit,
     onConfirm: (name: String, plate: String, fuelType: String, capacity: Float, initialMileage: Double) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var plate by remember { mutableStateOf("") }
-    var fuelType by remember { mutableStateOf("95#") }
-    var capacityText by remember { mutableStateOf("50") }
-    var initialMileageText by remember { mutableStateOf("0") }
+    var name by remember { mutableStateOf(initialName) }
+    var plate by remember { mutableStateOf(initialPlate) }
+    var fuelType by remember { mutableStateOf(initialFuelType) }
+    var capacityText by remember { mutableStateOf(initialCapacity.toInt().toString()) }
+    var initialMileageText by remember { mutableStateOf(initialMileage.toLong().toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加新车辆", fontWeight = FontWeight.Bold) },
+        title = { Text(title, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("车辆名称 (如: 雅阁 260)") },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = plate,
                     onValueChange = { plate = it },
                     label = { Text("车牌号 (选填)") },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = fuelType,
                     onValueChange = { fuelType = it },
                     label = { Text("燃油标号 (如 92# / 95#)") },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = capacityText,
                     onValueChange = { capacityText = it },
                     label = { Text("油箱容积 (L)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = initialMileageText,
                     onValueChange = { initialMileageText = it },
                     label = { Text("初始里程数 (km)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
@@ -300,9 +426,9 @@ private fun AddVehicleDialog(
                 onClick = {
                     if (name.isNotBlank()) {
                         onConfirm(
-                            name,
-                            plate,
-                            fuelType,
+                            name.trim(),
+                            plate.trim(),
+                            fuelType.trim(),
                             capacityText.toFloatOrNull() ?: 50f,
                             initialMileageText.toDoubleOrNull() ?: 0.0
                         )
@@ -310,7 +436,7 @@ private fun AddVehicleDialog(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
             ) {
-                Text("确定添加")
+                Text(confirmButtonText)
             }
         },
         dismissButton = {

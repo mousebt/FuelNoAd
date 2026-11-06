@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fueltracker.app.model.FuelRecord
 import com.fueltracker.app.ui.components.RecordItemCard
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class HistoryFilter {
     ALL,
@@ -27,10 +30,12 @@ enum class HistoryFilter {
 @Composable
 fun HistoryScreen(
     records: List<FuelRecord>,
+    onEditRecord: (FuelRecord) -> Unit,
     onDeleteRecord: (FuelRecord) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedFilter by remember { mutableStateOf(HistoryFilter.ALL) }
+    var recordPendingDelete by remember { mutableStateOf<FuelRecord?>(null) }
 
     val filteredRecords = remember(records, selectedFilter) {
         when (selectedFilter) {
@@ -60,7 +65,7 @@ fun HistoryScreen(
             )
 
             Text(
-                text = "共 ${filteredRecords.size} 笔",
+                text = "共 ${filteredRecords.size} 笔 (点击卡片可修改)",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
@@ -114,11 +119,45 @@ fun HistoryScreen(
                 items(filteredRecords, key = { it.id }) { record ->
                     RecordItemCard(
                         record = record,
-                        onDelete = { onDeleteRecord(record) }
+                        onEdit = { onEditRecord(record) },
+                        onDelete = { recordPendingDelete = record }
                     )
                 }
             }
         }
+    }
+
+    // Delete Confirmation Dialog
+    if (recordPendingDelete != null) {
+        val target = recordPendingDelete!!
+        val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(target.timestamp))
+        AlertDialog(
+            onDismissRequest = { recordPendingDelete = null },
+            title = {
+                Text(text = "删除加油记录", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    text = "确定要删除 ${dateStr}（里程 ${target.odometer.toLong()} km，金额 ¥${String.format(Locale.US, "%.2f", target.totalPrice)}）这条加油记录吗？\n\n删除后系统将自动重新计算相关的油耗与统计数据。"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteRecord(target)
+                        recordPendingDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("确认删除", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { recordPendingDelete = null }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 
