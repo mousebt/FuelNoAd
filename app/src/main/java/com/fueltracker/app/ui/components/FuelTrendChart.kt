@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,10 +22,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fueltracker.app.model.FuelRecord
@@ -33,6 +32,12 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+enum class TrendTimeFilter(val label: String) {
+    ALL("全部"),
+    ONE_YEAR("近1年"),
+    HALF_YEAR("近半年")
+}
 
 @Composable
 fun FuelTrendChart(
@@ -48,12 +53,25 @@ fun FuelTrendChart(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            val validRecords = remember(records) {
-                records.filter { it.calculatedConsumption != null }
+            var selectedFilter by remember { mutableStateOf(TrendTimeFilter.ALL) }
+            var expandedFilterDropdown by remember { mutableStateOf(false) }
+
+            val validRecords = remember(records, selectedFilter) {
+                val base = records.filter { it.calculatedConsumption != null }
+                when (selectedFilter) {
+                    TrendTimeFilter.ALL -> base
+                    TrendTimeFilter.ONE_YEAR -> {
+                        val oneYearAgo = System.currentTimeMillis() - 365L * 24 * 3600 * 1000
+                        base.filter { it.timestamp >= oneYearAgo }
+                    }
+                    TrendTimeFilter.HALF_YEAR -> {
+                        val halfYearAgo = System.currentTimeMillis() - 182L * 24 * 3600 * 1000
+                        base.filter { it.timestamp >= halfYearAgo }
+                    }
+                }
             }
 
             if (validRecords.size < 2) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -68,7 +86,7 @@ fun FuelTrendChart(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "百公里油耗走势 (L/100km)",
+                            text = "油耗变化趋势",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -94,16 +112,14 @@ fun FuelTrendChart(
             // Calculations
             val consumptions = remember(validRecords) { validRecords.map { it.calculatedConsumption!! } }
             val avgConsumption = remember(consumptions) { consumptions.average() }
-            val rawMin = consumptions.minOrNull() ?: 5.0
-            val rawMax = consumptions.maxOrNull() ?: 10.0
+            val rawMin = remember(consumptions) { consumptions.minOrNull() ?: 5.0 }
+            val rawMax = remember(consumptions) { consumptions.maxOrNull() ?: 9.0 }
             val minVal = (rawMin - 0.6).coerceAtLeast(0.0)
             val maxVal = rawMax + 0.6
 
             // Zoom & Pan state
-            // zoomLevel: 1.0 (default), 1.5, 2.0, 3.0, or 0.5
             var zoomLevel by remember { mutableStateOf(1.0f) }
-            var scrollOffset by remember { mutableStateOf(0f) } // in pixels
-            var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+            var scrollOffset by remember { mutableStateOf(0f) }
 
             // Selected point for inspection
             var selectedIndex by remember { mutableStateOf<Int?>(null) }
@@ -113,10 +129,10 @@ fun FuelTrendChart(
                 validRecords.lastOrNull()
             }
 
-            val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
-            val shortDateFormat = remember { SimpleDateFormat("MM-dd", Locale.getDefault()) }
+            val dateFormat = remember { SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()) }
+            val shortDateFormat = remember { SimpleDateFormat("yy/MM", Locale.getDefault()) }
 
-            // Header Row with Title and Zoom Controls
+            // Header Row: Title & Filter / Zoom controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -131,125 +147,129 @@ fun FuelTrendChart(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "百公里油耗走势",
+                        text = "油耗变化趋势",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                // Zoom controls (+ / -)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "缩放",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                    // Time filter dropdown
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                                .clickable { expandedFilterDropdown = true }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = selectedFilter.label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.SwapHoriz,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
 
-                    IconButton(
-                        onClick = {
-                            zoomLevel = (zoomLevel - 0.3f).coerceAtLeast(0.5f)
-                        },
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Remove,
-                            contentDescription = "缩小",
-                            modifier = Modifier.size(14.dp)
-                        )
+                        DropdownMenu(
+                            expanded = expandedFilterDropdown,
+                            onDismissRequest = { expandedFilterDropdown = false }
+                        ) {
+                            TrendTimeFilter.values().forEach { filter ->
+                                DropdownMenuItem(
+                                    text = { Text(filter.label) },
+                                    onClick = {
+                                        selectedFilter = filter
+                                        expandedFilterDropdown = false
+                                    }
+                                )
+                            }
+                        }
                     }
 
-                    Text(
-                        text = "${(zoomLevel * 100).roundToInt()}%",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(horizontal = 2.dp)
-                    )
-
-                    IconButton(
-                        onClick = {
-                            zoomLevel = (zoomLevel + 0.3f).coerceAtMost(4.0f)
-                        },
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                    // Zoom (+ / -)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "放大",
-                            modifier = Modifier.size(14.dp)
-                        )
+                        IconButton(
+                            onClick = { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.5f) },
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                        ) {
+                            Icon(imageVector = Icons.Default.Remove, contentDescription = "缩小", modifier = Modifier.size(12.dp))
+                        }
+                        IconButton(
+                            onClick = { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3.0f) },
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "放大", modifier = Modifier.size(12.dp))
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Point Inspection Panel (Active or Latest Record)
+            // Tooltip Card hovering / preview panel
             if (activeRecord != null) {
                 Card(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Color(0xFF10B981).copy(alpha = 0.2f))),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = dateFormat.format(Date(activeRecord.timestamp)),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "${activeRecord.odometer.toLong()} km",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                                if (activeRecord.distanceTraveled != null) {
-                                    Text(
-                                        text = " (+${activeRecord.distanceTraveled.toInt()}km)",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF059669)
-                                    )
-                                }
-                            }
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "加注 ${activeRecord.fuelAmount}L · ¥${String.format(Locale.US, "%.2f", activeRecord.totalPrice)}",
+                                text = dateFormat.format(Date(activeRecord.timestamp)),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${activeRecord.odometer.toLong()} km" + (if (activeRecord.distanceTraveled != null) " (+${activeRecord.distanceTraveled!!.toInt()}km)" else ""),
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
-
-                        Column(horizontalAlignment = Alignment.End) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "${activeRecord.calculatedConsumption} L/100km",
-                                fontSize = 15.sp,
+                                text = "油耗: ${activeRecord.calculatedConsumption} 升/百公里",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF059669)
                             )
                             Text(
-                                text = "平均: ${String.format(Locale.US, "%.2f", avgConsumption)} L/100km",
-                                fontSize = 10.sp,
+                                text = "平均参考: ${String.format(Locale.US, "%.2f", avgConsumption)} 升/百公里",
+                                fontSize = 11.sp,
                                 color = Color(0xFFF59E0B)
                             )
                         }
@@ -257,17 +277,13 @@ fun FuelTrendChart(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Chart Canvas Container
-            val baseSpacingPx = 48.dp
-            val basePaddingPx = 36.dp
-
+            // Chart Canvas
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp)
-                    .onSizeChanged { canvasSize = it }
             ) {
                 Canvas(
                     modifier = Modifier
@@ -280,7 +296,6 @@ fun FuelTrendChart(
                                 val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                 val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
 
-                                // Find closest point
                                 var closestIdx = -1
                                 var minDiff = Float.MAX_VALUE
                                 validRecords.indices.forEach { i ->
@@ -302,16 +317,15 @@ fun FuelTrendChart(
                                 val pointSpacing = 50.dp.toPx() * zoomLevel
                                 val totalW = (validRecords.size - 1) * pointSpacing + 2 * 36.dp.toPx()
                                 val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
-                                val newOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
-                                scrollOffset = newOffset
+                                scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
                             }
                         }
                 ) {
                     val width = size.width
                     val height = size.height
 
-                    val paddingTop = 20f
-                    val paddingBottom = 35f
+                    val paddingTop = 15f
+                    val paddingBottom = 30f
                     val graphHeight = height - paddingTop - paddingBottom
                     val pointSpacing = 50.dp.toPx() * zoomLevel
                     val paddingSide = 36.dp.toPx()
@@ -319,27 +333,36 @@ fun FuelTrendChart(
                     val totalContentWidth = (validRecords.size - 1) * pointSpacing + 2 * paddingSide
                     val maxScroll = (totalContentWidth - width).coerceAtLeast(0f)
 
-                    // Clamp scroll offset
                     if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
                     if (scrollOffset > 0f) scrollOffset = 0f
 
                     val currentOffset = scrollOffset
 
-                    // 1. Draw Average Line across entire viewport
+                    // Draw Horizontal Dotted Grid Lines (5, 6, 7, 8, 9)
+                    val gridSteps = 4
+                    for (s in 0..gridSteps) {
+                        val y = paddingTop + (graphHeight / gridSteps) * s
+                        drawLine(
+                            color = Color.LightGray.copy(alpha = 0.35f),
+                            start = Offset(0f, y),
+                            end = Offset(width, y),
+                            strokeWidth = 1.5f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                        )
+                    }
+
+                    // Draw Average Reference Line (Yellow / Orange Dashed)
                     val avgRatio = ((avgConsumption - minVal) / (maxVal - minVal)).toFloat().coerceIn(0f, 1f)
                     val avgY = paddingTop + graphHeight - (avgRatio * graphHeight)
-
-                    // Dashed line effect
-                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
                     drawLine(
-                        color = Color(0xFFF59E0B).copy(alpha = 0.7f),
+                        color = Color(0xFFF59E0B).copy(alpha = 0.75f),
                         start = Offset(0f, avgY),
                         end = Offset(width, avgY),
                         strokeWidth = 2.5f,
-                        pathEffect = pathEffect
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
                     )
 
-                    // Calculate point coordinates
+                    // Point Coordinates
                     val points = validRecords.indices.map { i ->
                         val x = paddingSide + i * pointSpacing + currentOffset
                         val ratio = ((validRecords[i].calculatedConsumption!! - minVal) / (maxVal - minVal)).toFloat()
@@ -347,7 +370,7 @@ fun FuelTrendChart(
                         Offset(x, y)
                     }
 
-                    // 2. Build Cubic Bezier Path
+                    // Cubic Bezier Curve
                     if (points.isNotEmpty()) {
                         val path = Path().apply {
                             moveTo(points[0].x, points[0].y)
@@ -369,8 +392,8 @@ fun FuelTrendChart(
 
                         val areaGradient = Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF10B981).copy(alpha = 0.30f),
-                                Color(0xFF10B981).copy(alpha = 0.0f)
+                                Color(0xFF10B981).copy(alpha = 0.28f),
+                                Color(0xFF10B981).copy(alpha = 0.02f)
                             ),
                             startY = paddingTop,
                             endY = paddingTop + graphHeight
@@ -382,19 +405,18 @@ fun FuelTrendChart(
                         drawPath(
                             path = path,
                             color = Color(0xFF10B981),
-                            style = Stroke(width = 5.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            style = Stroke(width = 5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                         )
 
-                        // 3. Draw Points & Labels
+                        // Points & guidelines
                         points.forEachIndexed { i, pt ->
-                            // Only draw visible or near-visible points for performance
                             if (pt.x >= -30f && pt.x <= width + 30f) {
                                 val isSelected = (i == selectedIndex) || (selectedIndex == null && i == points.size - 1)
 
                                 if (isSelected) {
                                     // Vertical guideline
                                     drawLine(
-                                        color = Color(0xFF10B981).copy(alpha = 0.4f),
+                                        color = Color(0xFF10B981).copy(alpha = 0.5f),
                                         start = Offset(pt.x, paddingTop),
                                         end = Offset(pt.x, paddingTop + graphHeight),
                                         strokeWidth = 2f,
@@ -409,17 +431,16 @@ fun FuelTrendChart(
                                     )
                                 }
 
-                                // Dot
                                 drawCircle(
                                     color = Color.White,
-                                    radius = if (isSelected) 8f else 5.5f,
+                                    radius = if (isSelected) 7.5f else 5f,
                                     center = pt
                                 )
                                 drawCircle(
                                     color = if (isSelected) Color(0xFF059669) else Color(0xFF10B981),
-                                    radius = if (isSelected) 8f else 5.5f,
+                                    radius = if (isSelected) 7.5f else 5f,
                                     center = pt,
-                                    style = Stroke(width = if (isSelected) 4.5f else 3f)
+                                    style = Stroke(width = if (isSelected) 4f else 3f)
                                 )
                             }
                         }
@@ -427,7 +448,7 @@ fun FuelTrendChart(
                 }
             }
 
-            // Quick Scale / Jump Buttons
+            // Legend & Extremes
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -435,61 +456,40 @@ fun FuelTrendChart(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    QuickJumpPill(
-                        label = "最新",
-                        onClick = {
-                            val pointSpacing = 50.dp.value * zoomLevel
-                            val totalW = (validRecords.size - 1) * pointSpacing + 72
-                            scrollOffset = -totalW * 2f
-                            selectedIndex = validRecords.size - 1
-                        }
-                    )
-                    QuickJumpPill(
-                        label = "最早",
-                        onClick = {
-                            scrollOffset = 0f
-                            selectedIndex = 0
-                        }
-                    )
-                    QuickJumpPill(
-                        label = "均值: ${String.format(Locale.US, "%.2f", avgConsumption)}",
-                        isHighlight = true,
-                        onClick = {}
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981))
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("油耗", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF59E0B))
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("平均油耗参考", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
                 }
 
                 Text(
-                    text = "👈 左右拖动图表查看 ${validRecords.size} 次历史 👉",
+                    text = "极值: ${rawMin} ~ ${rawMax}",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun QuickJumpPill(
-    label: String,
-    isHighlight: Boolean = false,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(
-                if (isHighlight) Color(0xFFF59E0B).copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 3.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (isHighlight) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
     }
 }

@@ -92,6 +92,7 @@ fun MainScreen(
                     },
                     onDeleteRecord = { viewModel.deleteRecord(it) },
                     onNavigateToHistory = { currentTab = Screen.History },
+                    onNavigateToAnalytics = { currentTab = Screen.Analytics },
                     modifier = screenModifier
                 )
             }

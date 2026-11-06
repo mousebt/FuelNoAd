@@ -39,8 +39,8 @@ jobs:
         run: |
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             echo "### ✅ APK 构建成功！" >> $GITHUB_STEP_SUMMARY
-            echo "- **版本**：v0.2.0-beta (Build 2)" >> $GITHUB_STEP_SUMMARY
-            echo "- **产物**：FuelTracker-v0.2.0-beta-Build2.apk" >> $GITHUB_STEP_SUMMARY
+            echo "- **版本**：v0.3.0-beta (Build 3)" >> $GITHUB_STEP_SUMMARY
+            echo "- **产物**：FuelTracker-v0.3.0-beta-Build3.apk" >> $GITHUB_STEP_SUMMARY
           else
             echo "### ❌ 构建失败日志摘要：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -53,14 +53,14 @@ jobs:
         if: success()
         run: |
           mkdir -p release-output
-          cp app/build/outputs/apk/debug/app-debug.apk release-output/FuelTracker-v0.2.0-beta-Build2.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/FuelTracker-v0.3.0-beta-Build3.apk
         shell: bash
 
       - name: Upload APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: FuelTracker-v0.2.0-beta-Build2
-          path: release-output/FuelTracker-v0.2.0-beta-Build2.apk
+          name: FuelTracker-v0.3.0-beta-Build3
+          path: release-output/FuelTracker-v0.3.0-beta-Build3.apk
           if-no-files-found: error
           retention-days: 14
