@@ -14,8 +14,8 @@ android {
         applicationId = "com.fueltracker.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.3.2-beta"
+        versionCode = 6
+        versionName = "0.3.3-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -23,9 +23,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("common") {
+            storeFile = file("release.keystore")
+            storePassword = "android"
+            keyAlias = "fueltracker"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("common")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("common")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
