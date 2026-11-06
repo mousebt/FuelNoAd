@@ -14,8 +14,8 @@ android {
         applicationId = "com.fueltracker.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.3.3-beta"
+        versionCode = 7
+        versionName = "0.3.4-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

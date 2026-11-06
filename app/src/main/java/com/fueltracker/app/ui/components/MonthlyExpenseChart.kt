@@ -35,6 +35,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 enum class MonthlyChartFilter(val label: String) {
+    LATEST_10("近10月"),
     THIS_YEAR("今年"),
     ALL("全部")
 }
@@ -44,7 +45,7 @@ fun MonthlyExpenseChart(
     records: List<FuelRecord>,
     modifier: Modifier = Modifier
 ) {
-    var selectedFilter by remember { mutableStateOf(MonthlyChartFilter.THIS_YEAR) }
+    var selectedFilter by remember { mutableStateOf(MonthlyChartFilter.LATEST_10) }
     var expandedDropdown by remember { mutableStateOf(false) }
 
     val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
@@ -54,21 +55,22 @@ fun MonthlyExpenseChart(
         val formatKey = SimpleDateFormat("yyyy-MM", Locale.getDefault())
         val formatLabel = SimpleDateFormat("M月", Locale.getDefault())
 
-        val filtered = when (selectedFilter) {
-            MonthlyChartFilter.THIS_YEAR -> records.filter {
-                cal.timeInMillis = it.timestamp
-                cal.get(Calendar.YEAR) == currentYear
-            }
-            MonthlyChartFilter.ALL -> records
-        }
-
-        filtered.groupBy { formatKey.format(Date(it.timestamp)) }
+        val allGrouped = records.groupBy { formatKey.format(Date(it.timestamp)) }
             .map { (key, list) ->
                 val date = Date(list.first().timestamp)
                 val year = key.substring(0, 4)
                 Triple(key, "${formatLabel.format(date)}", list.sumOf { it.totalPrice })
             }
-            .sortedBy { it.first }
+            .sortedBy { it.first } // Chronological ascending: oldest first, newest last
+
+        when (selectedFilter) {
+            MonthlyChartFilter.LATEST_10 -> allGrouped.takeLast(10)
+            MonthlyChartFilter.THIS_YEAR -> allGrouped.filter {
+                cal.timeInMillis = records.firstOrNull { r -> formatKey.format(Date(r.timestamp)) == it.first }?.timestamp ?: 0L
+                it.first.startsWith(currentYear.toString())
+            }
+            MonthlyChartFilter.ALL -> allGrouped
+        }
     }
 
     if (monthlyItems.isEmpty()) return
@@ -83,6 +85,12 @@ fun MonthlyExpenseChart(
 
     var scrollOffset by remember { mutableStateOf(0f) }
     var selectedItemIndex by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(monthlyItems) {
+        // Default to focusing on the newest month
+        selectedItemIndex = null
+        scrollOffset = if (monthlyItems.size <= 10) 0f else -99999f
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -167,9 +175,14 @@ fun MonthlyExpenseChart(
                         .fillMaxSize()
                         .pointerInput(monthlyItems) {
                             detectTapGestures { tapOffset ->
-                                val slotW = 46.dp.toPx()
                                 val paddingLeft = 36.dp.toPx()
                                 val paddingRight = 16.dp.toPx()
+                                val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                val slotW = if (monthlyItems.size <= 10) {
+                                    availableW / monthlyItems.size.coerceAtLeast(1)
+                                } else {
+                                    46.dp.toPx()
+                                }
                                 val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
@@ -182,9 +195,14 @@ fun MonthlyExpenseChart(
                         }
                         .pointerInput(monthlyItems) {
                             detectHorizontalDragGestures { _, dragAmount ->
-                                val slotW = 46.dp.toPx()
                                 val paddingLeft = 36.dp.toPx()
                                 val paddingRight = 16.dp.toPx()
+                                val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                val slotW = if (monthlyItems.size <= 10) {
+                                    availableW / monthlyItems.size.coerceAtLeast(1)
+                                } else {
+                                    46.dp.toPx()
+                                }
                                 val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
@@ -196,10 +214,15 @@ fun MonthlyExpenseChart(
                     val paddingTop = 26f
                     val paddingBottom = 26f
                     val graphHeight = height - paddingTop - paddingBottom
-                    val slotW = 46.dp.toPx()
-                    val barW = 24.dp.toPx()
                     val paddingLeft = 36.dp.toPx()
                     val paddingRight = 16.dp.toPx()
+                    val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
+                    val slotW = if (monthlyItems.size <= 10) {
+                        availableW / monthlyItems.size.coerceAtLeast(1)
+                    } else {
+                        46.dp.toPx()
+                    }
+                    val barW = (slotW * 0.52f).coerceIn(16f, 32f)
 
                     val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                     val maxScroll = (totalW - width).coerceAtLeast(0f)

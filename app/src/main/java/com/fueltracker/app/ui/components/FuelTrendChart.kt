@@ -34,9 +34,11 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 enum class TrendTimeFilter(val label: String) {
-    ALL("全部"),
+    LATEST_10("近10次"),
+    LATEST_20("近20次"),
+    HALF_YEAR("近半年"),
     ONE_YEAR("近1年"),
-    HALF_YEAR("近半年")
+    ALL("全部")
 }
 
 @Composable
@@ -53,21 +55,26 @@ fun FuelTrendChart(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            var selectedFilter by remember { mutableStateOf(TrendTimeFilter.ALL) }
+            var selectedFilter by remember { mutableStateOf(TrendTimeFilter.LATEST_10) }
             var expandedFilterDropdown by remember { mutableStateOf(false) }
 
             val validRecords = remember(records, selectedFilter) {
-                val base = records.filter { it.calculatedConsumption != null }
+                // Chronological ascending: oldest first, newest last
+                val sorted = records.filter { it.calculatedConsumption != null }
+                    .sortedWith(compareBy({ it.odometer }, { it.timestamp }))
+
                 when (selectedFilter) {
-                    TrendTimeFilter.ALL -> base
-                    TrendTimeFilter.ONE_YEAR -> {
-                        val oneYearAgo = System.currentTimeMillis() - 365L * 24 * 3600 * 1000
-                        base.filter { it.timestamp >= oneYearAgo }
-                    }
+                    TrendTimeFilter.LATEST_10 -> sorted.takeLast(10)
+                    TrendTimeFilter.LATEST_20 -> sorted.takeLast(20)
                     TrendTimeFilter.HALF_YEAR -> {
                         val halfYearAgo = System.currentTimeMillis() - 182L * 24 * 3600 * 1000
-                        base.filter { it.timestamp >= halfYearAgo }
+                        sorted.filter { it.timestamp >= halfYearAgo }
                     }
+                    TrendTimeFilter.ONE_YEAR -> {
+                        val oneYearAgo = System.currentTimeMillis() - 365L * 24 * 3600 * 1000
+                        sorted.filter { it.timestamp >= oneYearAgo }
+                    }
+                    TrendTimeFilter.ALL -> sorted
                 }
             }
 
@@ -120,6 +127,12 @@ fun FuelTrendChart(
             // Zoom & Pan state
             var zoomLevel by remember { mutableStateOf(1.0f) }
             var scrollOffset by remember { mutableStateOf(0f) }
+
+            LaunchedEffect(validRecords) {
+                // Focus on the newest record by default
+                selectedIndex = null
+                scrollOffset = if (validRecords.size <= 10) 0f else -99999f
+            }
 
             // Selected point for inspection
             var selectedIndex by remember { mutableStateOf<Int?>(null) }
@@ -310,9 +323,15 @@ fun FuelTrendChart(
                         .fillMaxSize()
                         .pointerInput(validRecords, zoomLevel) {
                             detectTapGestures { tapOffset ->
-                                val pointSpacing = 52.dp.toPx() * zoomLevel
                                 val paddingLeft = 38.dp.toPx()
                                 val paddingRight = 20.dp.toPx()
+                                val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                val baseSpacing = if (validRecords.size <= 10) {
+                                    availableW / (validRecords.size - 1).coerceAtLeast(1)
+                                } else {
+                                    50.dp.toPx()
+                                }
+                                val pointSpacing = baseSpacing * zoomLevel
                                 val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
@@ -334,9 +353,15 @@ fun FuelTrendChart(
                         }
                         .pointerInput(validRecords, zoomLevel) {
                             detectHorizontalDragGestures { _, dragAmount ->
-                                val pointSpacing = 52.dp.toPx() * zoomLevel
                                 val paddingLeft = 38.dp.toPx()
                                 val paddingRight = 20.dp.toPx()
+                                val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                val baseSpacing = if (validRecords.size <= 10) {
+                                    availableW / (validRecords.size - 1).coerceAtLeast(1)
+                                } else {
+                                    50.dp.toPx()
+                                }
+                                val pointSpacing = baseSpacing * zoomLevel
                                 val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
@@ -351,7 +376,13 @@ fun FuelTrendChart(
                     val graphHeight = height - paddingTop - paddingBottom
                     val paddingLeft = 38.dp.toPx() // Room for Y-axis numbers
                     val paddingRight = 20.dp.toPx()
-                    val pointSpacing = 52.dp.toPx() * zoomLevel
+                    val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
+                    val baseSpacing = if (validRecords.size <= 10) {
+                        availableW / (validRecords.size - 1).coerceAtLeast(1)
+                    } else {
+                        50.dp.toPx()
+                    }
+                    val pointSpacing = baseSpacing * zoomLevel
 
                     val totalContentWidth = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                     val maxScroll = (totalContentWidth - width).coerceAtLeast(0f)

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -161,7 +162,9 @@ fun AnalyticsScreen(
     }
 
     // 4. Monthly Expenses Grouping (accurate by yyyy-MM across all available records)
-    val monthlyList = remember(records) {
+    var monthlyFilterMode by remember { mutableStateOf("近10月") }
+
+    val allMonthlyList = remember(records) {
         val cal = Calendar.getInstance()
         val formatKey = SimpleDateFormat("yyyy-MM", Locale.getDefault())
         val formatLabel = SimpleDateFormat("yy/MM", Locale.getDefault())
@@ -179,7 +182,15 @@ fun AnalyticsScreen(
                     count = list.size
                 )
             }
-            .sortedBy { it.key }
+            .sortedBy { it.key } // chronological ascending: oldest first, newest last
+    }
+
+    val monthlyList = remember(allMonthlyList, monthlyFilterMode) {
+        if (monthlyFilterMode == "近10月") {
+            allMonthlyList.takeLast(10)
+        } else {
+            allMonthlyList
+        }
     }
 
     val avgMonthlyExpense = remember(monthlyList) {
@@ -190,6 +201,11 @@ fun AnalyticsScreen(
     var barZoomLevel by remember { mutableStateOf(1.0f) }
     var barScrollOffset by remember { mutableStateOf(0f) }
     var selectedMonthItem by remember { mutableStateOf<MonthExpenseItem?>(null) }
+
+    LaunchedEffect(monthlyList) {
+        selectedMonthItem = monthlyList.lastOrNull()
+        barScrollOffset = if (monthlyList.size <= 10) 0f else -99999f
+    }
 
     val activeMonthItem = selectedMonthItem ?: monthlyList.lastOrNull()
 
@@ -534,48 +550,79 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Zoom buttons (Clean text & icon without circular bubble background)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "缩放",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                        Box(
+                        // Filter pill (近10月 / 全部)
+                        Row(
                             modifier = Modifier
-                                .size(22.dp)
-                                .clickable { barZoomLevel = (barZoomLevel - 0.25f).coerceAtLeast(0.5f) },
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                                .clickable {
+                                    monthlyFilterMode = if (monthlyFilterMode == "近10月") "全部" else "近10月"
+                                }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text(
+                                text = monthlyFilterMode,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
                             Icon(
-                                imageVector = Icons.Default.Remove,
-                                contentDescription = "缩小",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                imageVector = Icons.Default.SwapHoriz,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                         }
-                        Text(
-                            text = "${(barZoomLevel * 100).roundToInt()}%",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clickable { barZoomLevel = (barZoomLevel + 0.25f).coerceAtMost(3.0f) },
-                            contentAlignment = Alignment.Center
+
+                        // Zoom buttons (Clean text & icon without circular bubble background)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "放大",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            Text(
+                                text = "缩放",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clickable { barZoomLevel = (barZoomLevel - 0.25f).coerceAtLeast(0.5f) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Remove,
+                                    contentDescription = "缩小",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                            Text(
+                                text = "${(barZoomLevel * 100).roundToInt()}%",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clickable { barZoomLevel = (barZoomLevel + 0.25f).coerceAtMost(3.0f) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "放大",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
                 }
@@ -652,9 +699,15 @@ fun AnalyticsScreen(
                                 .pointerInput(monthlyList, barZoomLevel) {
                                     detectTapGestures { tapOffset ->
                                         val viewportW = size.width.toFloat()
-                                        val slotW = 52.dp.toPx() * barZoomLevel
                                         val paddingLeft = 36.dp.toPx()
                                         val paddingRight = 16.dp.toPx()
+                                        val availableW = (viewportW - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                        val baseSlotW = if (monthlyList.size <= 10) {
+                                            availableW / monthlyList.size.coerceAtLeast(1)
+                                        } else {
+                                            48.dp.toPx()
+                                        }
+                                        val slotW = baseSlotW * barZoomLevel
                                         val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                         val currentOffset = barScrollOffset.coerceIn(-maxScroll, 0f)
@@ -668,9 +721,15 @@ fun AnalyticsScreen(
                                 .pointerInput(monthlyList, barZoomLevel) {
                                     detectHorizontalDragGestures { _, dragAmount ->
                                         val viewportW = size.width.toFloat()
-                                        val slotW = 52.dp.toPx() * barZoomLevel
                                         val paddingLeft = 36.dp.toPx()
                                         val paddingRight = 16.dp.toPx()
+                                        val availableW = (viewportW - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                        val baseSlotW = if (monthlyList.size <= 10) {
+                                            availableW / monthlyList.size.coerceAtLeast(1)
+                                        } else {
+                                            48.dp.toPx()
+                                        }
+                                        val slotW = baseSlotW * barZoomLevel
                                         val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                         barScrollOffset = (barScrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
@@ -683,10 +742,16 @@ fun AnalyticsScreen(
                             val paddingTop = 24f
                             val paddingBottom = 26f
                             val graphHeight = height - paddingTop - paddingBottom
-                            val slotW = 52.dp.toPx() * barZoomLevel
-                            val barW = (slotW * 0.48f).coerceIn(16f, 38f)
                             val paddingLeft = 36.dp.toPx()
                             val paddingRight = 16.dp.toPx()
+                            val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
+                            val baseSlotW = if (monthlyList.size <= 10) {
+                                availableW / monthlyList.size.coerceAtLeast(1)
+                            } else {
+                                48.dp.toPx()
+                            }
+                            val slotW = baseSlotW * barZoomLevel
+                            val barW = (slotW * 0.48f).coerceIn(16f, 36f)
 
                             val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                             val maxScroll = (totalW - width).coerceAtLeast(0f)
