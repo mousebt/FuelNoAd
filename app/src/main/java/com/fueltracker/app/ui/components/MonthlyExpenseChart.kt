@@ -35,7 +35,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 enum class MonthlyChartFilter(val label: String) {
-    LATEST_10("近10月"),
+    LATEST_12("近12月"),
     THIS_YEAR("今年"),
     ALL("全部")
 }
@@ -45,7 +45,7 @@ fun MonthlyExpenseChart(
     records: List<FuelRecord>,
     modifier: Modifier = Modifier
 ) {
-    var selectedFilter by remember { mutableStateOf(MonthlyChartFilter.LATEST_10) }
+    var selectedFilter by remember { mutableStateOf(MonthlyChartFilter.LATEST_12) }
     var expandedDropdown by remember { mutableStateOf(false) }
 
     val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
@@ -64,7 +64,7 @@ fun MonthlyExpenseChart(
             .sortedBy { it.first } // Chronological ascending: oldest first, newest last
 
         when (selectedFilter) {
-            MonthlyChartFilter.LATEST_10 -> allGrouped.takeLast(10)
+            MonthlyChartFilter.LATEST_12 -> allGrouped.takeLast(12)
             MonthlyChartFilter.THIS_YEAR -> allGrouped.filter {
                 cal.timeInMillis = records.firstOrNull { r -> formatKey.format(Date(r.timestamp)) == it.first }?.timestamp ?: 0L
                 it.first.startsWith(currentYear.toString())
@@ -89,7 +89,7 @@ fun MonthlyExpenseChart(
     LaunchedEffect(monthlyItems) {
         // Default to focusing on the newest month
         selectedItemIndex = null
-        scrollOffset = if (monthlyItems.size <= 10) 0f else -99999f
+        scrollOffset = if (monthlyItems.size <= 12) 0f else -99999f
     }
 
     Card(
@@ -178,10 +178,10 @@ fun MonthlyExpenseChart(
                                 val paddingLeft = 36.dp.toPx()
                                 val paddingRight = 16.dp.toPx()
                                 val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
-                                val slotW = if (monthlyItems.size <= 10) {
+                                val slotW = if (monthlyItems.size <= 12) {
                                     availableW / monthlyItems.size.coerceAtLeast(1)
                                 } else {
-                                    46.dp.toPx()
+                                    42.dp.toPx()
                                 }
                                 val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
@@ -198,10 +198,10 @@ fun MonthlyExpenseChart(
                                 val paddingLeft = 36.dp.toPx()
                                 val paddingRight = 16.dp.toPx()
                                 val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
-                                val slotW = if (monthlyItems.size <= 10) {
+                                val slotW = if (monthlyItems.size <= 12) {
                                     availableW / monthlyItems.size.coerceAtLeast(1)
                                 } else {
-                                    46.dp.toPx()
+                                    42.dp.toPx()
                                 }
                                 val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
@@ -217,12 +217,12 @@ fun MonthlyExpenseChart(
                     val paddingLeft = 36.dp.toPx()
                     val paddingRight = 16.dp.toPx()
                     val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
-                    val slotW = if (monthlyItems.size <= 10) {
+                    val slotW = if (monthlyItems.size <= 12) {
                         availableW / monthlyItems.size.coerceAtLeast(1)
                     } else {
-                        46.dp.toPx()
+                        42.dp.toPx()
                     }
-                    val barW = (slotW * 0.52f).coerceIn(16f, 32f)
+                    val barW = (slotW * 0.52f).coerceIn(14f, 30f)
 
                     val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                     val maxScroll = (totalW - width).coerceAtLeast(0f)
@@ -290,7 +290,7 @@ fun MonthlyExpenseChart(
                         }
                     }
 
-                    // Draw Bars, Top Amounts, and Bottom Month Labels
+                    // Draw Bars, Top Amounts, and Bottom Month Labels (Clipped to prevent bleeding over Y-axis)
                     val textPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.DKGRAY
                         textSize = 21f
@@ -305,38 +305,40 @@ fun MonthlyExpenseChart(
                         isAntiAlias = true
                     }
 
-                    monthlyItems.forEachIndexed { i, (_, label, amount) ->
-                        val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
-                        if (centerX >= -barW && centerX <= width + barW) {
-                            val barH = ((amount / maxAmount) * graphHeight).toFloat().coerceAtLeast(4f)
-                            val topY = paddingTop + graphHeight - barH
+                    clipRect(left = paddingLeft - 2f, top = 0f, right = width + 10f, bottom = height) {
+                        monthlyItems.forEachIndexed { i, (_, label, amount) ->
+                            val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
+                            if (centerX >= -barW && centerX <= width + barW) {
+                                val barH = ((amount / maxAmount) * graphHeight).toFloat().coerceAtLeast(4f)
+                                val topY = paddingTop + graphHeight - barH
 
-                            // Vibrant Pink / Rose color like reference screenshot
-                            val barColor = Color(0xFFF43F5E)
+                                // Vibrant Pink / Rose color like reference screenshot
+                                val barColor = Color(0xFFF43F5E)
 
-                            drawRoundRect(
-                                color = barColor,
-                                topLeft = Offset(centerX - barW / 2, topY),
-                                size = Size(barW, barH),
-                                cornerRadius = CornerRadius(6f, 6f)
-                            )
-
-                            drawIntoCanvas { canvas ->
-                                // Top amount
-                                canvas.nativeCanvas.drawText(
-                                    amount.roundToInt().toString(),
-                                    centerX,
-                                    topY - 8f,
-                                    textPaint
+                                drawRoundRect(
+                                    color = barColor,
+                                    topLeft = Offset(centerX - barW / 2, topY),
+                                    size = Size(barW, barH),
+                                    cornerRadius = CornerRadius(6f, 6f)
                                 )
 
-                                // Bottom month label
-                                canvas.nativeCanvas.drawText(
-                                    label,
-                                    centerX,
-                                    height - 4f,
-                                    labelPaint
-                                )
+                                drawIntoCanvas { canvas ->
+                                    // Top amount
+                                    canvas.nativeCanvas.drawText(
+                                        amount.roundToInt().toString(),
+                                        centerX,
+                                        topY - 8f,
+                                        textPaint
+                                    )
+
+                                    // Bottom month label
+                                    canvas.nativeCanvas.drawText(
+                                        label,
+                                        centerX,
+                                        height - 4f,
+                                        labelPaint
+                                    )
+                                }
                             }
                         }
                     }

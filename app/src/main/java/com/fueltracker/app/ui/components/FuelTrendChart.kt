@@ -34,8 +34,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 enum class TrendTimeFilter(val label: String) {
-    LATEST_10("近10次"),
-    LATEST_20("近20次"),
+    LATEST_12("近12次"),
+    LATEST_24("近24次"),
     HALF_YEAR("近半年"),
     ONE_YEAR("近1年"),
     ALL("全部")
@@ -55,7 +55,7 @@ fun FuelTrendChart(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            var selectedFilter by remember { mutableStateOf(TrendTimeFilter.LATEST_10) }
+            var selectedFilter by remember { mutableStateOf(TrendTimeFilter.LATEST_12) }
             var expandedFilterDropdown by remember { mutableStateOf(false) }
 
             val validRecords = remember(records, selectedFilter) {
@@ -64,8 +64,8 @@ fun FuelTrendChart(
                     .sortedWith(compareBy({ it.odometer }, { it.timestamp }))
 
                 when (selectedFilter) {
-                    TrendTimeFilter.LATEST_10 -> sorted.takeLast(10)
-                    TrendTimeFilter.LATEST_20 -> sorted.takeLast(20)
+                    TrendTimeFilter.LATEST_12 -> sorted.takeLast(12)
+                    TrendTimeFilter.LATEST_24 -> sorted.takeLast(24)
                     TrendTimeFilter.HALF_YEAR -> {
                         val halfYearAgo = System.currentTimeMillis() - 182L * 24 * 3600 * 1000
                         sorted.filter { it.timestamp >= halfYearAgo }
@@ -124,8 +124,7 @@ fun FuelTrendChart(
             val minVal = (rawMin - 0.6).coerceAtLeast(0.0)
             val maxVal = rawMax + 0.6
 
-            // Zoom & Pan state
-            var zoomLevel by remember { mutableStateOf(1.0f) }
+            // Pan state
             var scrollOffset by remember { mutableStateOf(0f) }
 
             // Selected point for inspection
@@ -134,7 +133,7 @@ fun FuelTrendChart(
             LaunchedEffect(validRecords) {
                 // Focus on the newest record by default
                 selectedIndex = null
-                scrollOffset = if (validRecords.size <= 10) 0f else -99999f
+                scrollOffset = if (validRecords.size <= 12) 0f else -99999f
             }
 
             val activeRecord = if (selectedIndex != null && selectedIndex in validRecords.indices) {
@@ -146,7 +145,7 @@ fun FuelTrendChart(
             val dateFormat = remember { SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()) }
             val axisDateFormat = remember { SimpleDateFormat("MM/dd", Locale.getDefault()) }
 
-            // Header Row: Title & Filter / Clean Zoom controls
+            // Header Row: Title & Filter
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -168,92 +167,42 @@ fun FuelTrendChart(
                     )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Time filter dropdown
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                                .clickable { expandedFilterDropdown = true }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = selectedFilter.label,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = expandedFilterDropdown,
-                            onDismissRequest = { expandedFilterDropdown = false }
-                        ) {
-                            TrendTimeFilter.values().forEach { filter ->
-                                DropdownMenuItem(
-                                    text = { Text(filter.label) },
-                                    onClick = {
-                                        selectedFilter = filter
-                                        expandedFilterDropdown = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Clean Zoom controls (No circular bubble background)
+                // Time filter dropdown
+                Box {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                            .clickable { expandedFilterDropdown = true }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "缩放",
+                            text = selectedFilter.label,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clickable { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.5f) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Remove,
-                                contentDescription = "缩小",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                        }
-                        Text(
-                            text = "${(zoomLevel * 100).toInt()}%",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clickable { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3.0f) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "放大",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = expandedFilterDropdown,
+                        onDismissRequest = { expandedFilterDropdown = false }
+                    ) {
+                        TrendTimeFilter.values().forEach { filter ->
+                            DropdownMenuItem(
+                                text = { Text(filter.label) },
+                                onClick = {
+                                    selectedFilter = filter
+                                    expandedFilterDropdown = false
+                                }
                             )
                         }
                     }
@@ -322,17 +271,16 @@ fun FuelTrendChart(
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(validRecords, zoomLevel) {
+                        .pointerInput(validRecords) {
                             detectTapGestures { tapOffset ->
                                 val paddingLeft = 38.dp.toPx()
                                 val paddingRight = 20.dp.toPx()
                                 val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
-                                val baseSpacing = if (validRecords.size <= 10) {
+                                val pointSpacing = if (validRecords.size <= 12) {
                                     availableW / (validRecords.size - 1).coerceAtLeast(1)
                                 } else {
-                                    50.dp.toPx()
+                                    42.dp.toPx()
                                 }
-                                val pointSpacing = baseSpacing * zoomLevel
                                 val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
@@ -352,17 +300,16 @@ fun FuelTrendChart(
                                 }
                             }
                         }
-                        .pointerInput(validRecords, zoomLevel) {
+                        .pointerInput(validRecords) {
                             detectHorizontalDragGestures { _, dragAmount ->
                                 val paddingLeft = 38.dp.toPx()
                                 val paddingRight = 20.dp.toPx()
                                 val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
-                                val baseSpacing = if (validRecords.size <= 10) {
+                                val pointSpacing = if (validRecords.size <= 12) {
                                     availableW / (validRecords.size - 1).coerceAtLeast(1)
                                 } else {
-                                    50.dp.toPx()
+                                    42.dp.toPx()
                                 }
-                                val pointSpacing = baseSpacing * zoomLevel
                                 val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
@@ -378,12 +325,11 @@ fun FuelTrendChart(
                     val paddingLeft = 38.dp.toPx() // Room for Y-axis numbers
                     val paddingRight = 20.dp.toPx()
                     val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
-                    val baseSpacing = if (validRecords.size <= 10) {
+                    val pointSpacing = if (validRecords.size <= 12) {
                         availableW / (validRecords.size - 1).coerceAtLeast(1)
                     } else {
-                        50.dp.toPx()
+                        42.dp.toPx()
                     }
-                    val pointSpacing = baseSpacing * zoomLevel
 
                     val totalContentWidth = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                     val maxScroll = (totalContentWidth - width).coerceAtLeast(0f)
@@ -469,92 +415,94 @@ fun FuelTrendChart(
                         Offset(x, y)
                     }
 
-                    // 4. Cubic Bezier Curve
-                    if (points.isNotEmpty()) {
-                        val path = Path().apply {
-                            moveTo(points[0].x, points[0].y)
-                            for (i in 1 until points.size) {
-                                val prev = points[i - 1]
-                                val curr = points[i]
-                                val midX = (prev.x + curr.x) / 2
-                                cubicTo(midX, prev.y, midX, curr.y, curr.x, curr.y)
+                    // 4. Cubic Bezier Curve, Fill, Points & Labels (Clipped to prevent bleeding over Y-axis)
+                    clipRect(left = paddingLeft - 2f, top = 0f, right = width + 20f, bottom = height) {
+                        if (points.isNotEmpty()) {
+                            val path = Path().apply {
+                                moveTo(points[0].x, points[0].y)
+                                for (i in 1 until points.size) {
+                                    val prev = points[i - 1]
+                                    val curr = points[i]
+                                    val midX = (prev.x + curr.x) / 2
+                                    cubicTo(midX, prev.y, midX, curr.y, curr.x, curr.y)
+                                }
                             }
-                        }
 
-                        // Gradient Fill Area
-                        val fillPath = Path().apply {
-                            addPath(path)
-                            lineTo(points.last().x, paddingTop + graphHeight)
-                            lineTo(points.first().x, paddingTop + graphHeight)
-                            close()
-                        }
+                            // Gradient Fill Area
+                            val fillPath = Path().apply {
+                                addPath(path)
+                                lineTo(points.last().x, paddingTop + graphHeight)
+                                lineTo(points.first().x, paddingTop + graphHeight)
+                                close()
+                            }
 
-                        val areaGradient = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF10B981).copy(alpha = 0.28f),
-                                Color(0xFF10B981).copy(alpha = 0.02f)
-                            ),
-                            startY = paddingTop,
-                            endY = paddingTop + graphHeight
-                        )
+                            val areaGradient = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF10B981).copy(alpha = 0.28f),
+                                    Color(0xFF10B981).copy(alpha = 0.02f)
+                                ),
+                                startY = paddingTop,
+                                endY = paddingTop + graphHeight
+                            )
 
-                        drawPath(path = fillPath, brush = areaGradient)
+                            drawPath(path = fillPath, brush = areaGradient)
 
-                        // Stroke path
-                        drawPath(
-                            path = path,
-                            color = Color(0xFF10B981),
-                            style = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
+                            // Stroke path
+                            drawPath(
+                                path = path,
+                                color = Color(0xFF10B981),
+                                style = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            )
 
-                        // 5. Draw Points, Numbers on Points, Guidelines, and X-Axis Dates
-                        drawIntoCanvas { canvas ->
-                            points.forEachIndexed { i, pt ->
-                                if (pt.x >= paddingLeft - 20f && pt.x <= width + 20f) {
-                                    val isSelected = (i == selectedIndex) || (selectedIndex == null && i == points.size - 1)
-                                    val r = validRecords[i]
+                            // 5. Draw Points, Numbers on Points, Guidelines, and X-Axis Dates
+                            drawIntoCanvas { canvas ->
+                                points.forEachIndexed { i, pt ->
+                                    if (pt.x >= paddingLeft - 20f && pt.x <= width + 20f) {
+                                        val isSelected = (i == selectedIndex) || (selectedIndex == null && i == points.size - 1)
+                                        val r = validRecords[i]
 
-                                    if (isSelected) {
-                                        // Vertical guideline (no outer halo ring)
-                                        drawLine(
-                                            color = Color(0xFF10B981).copy(alpha = 0.5f),
-                                            start = Offset(pt.x, paddingTop),
-                                            end = Offset(pt.x, paddingTop + graphHeight),
-                                            strokeWidth = 2f,
-                                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                                        if (isSelected) {
+                                            // Vertical guideline (no outer halo ring)
+                                            drawLine(
+                                                color = Color(0xFF10B981).copy(alpha = 0.5f),
+                                                start = Offset(pt.x, paddingTop),
+                                                end = Offset(pt.x, paddingTop + graphHeight),
+                                                strokeWidth = 2f,
+                                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                                            )
+                                        }
+
+                                        // Crisp Clean Dot (no big halo circle)
+                                        drawCircle(
+                                            color = Color.White,
+                                            radius = if (isSelected) 6.5f else 4.5f,
+                                            center = pt
+                                        )
+                                        drawCircle(
+                                            color = if (isSelected) Color(0xFF047857) else Color(0xFF10B981),
+                                            radius = if (isSelected) 6.5f else 4.5f,
+                                            center = pt,
+                                            style = Stroke(width = if (isSelected) 3.5f else 2.5f)
+                                        )
+
+                                        // Number on Data Point
+                                        val consumptionText = String.format(Locale.US, "%.1f", r.calculatedConsumption)
+                                        canvas.nativeCanvas.drawText(
+                                            consumptionText,
+                                            pt.x,
+                                            pt.y - 12f,
+                                            if (isSelected) selectedValuePaint else pointValuePaint
+                                        )
+
+                                        // X-Axis Date label below point
+                                        val dateText = axisDateFormat.format(Date(r.timestamp))
+                                        canvas.nativeCanvas.drawText(
+                                            dateText,
+                                            pt.x,
+                                            height - 4f,
+                                            xAxisPaint
                                         )
                                     }
-
-                                    // Crisp Clean Dot (no big halo circle)
-                                    drawCircle(
-                                        color = Color.White,
-                                        radius = if (isSelected) 6.5f else 4.5f,
-                                        center = pt
-                                    )
-                                    drawCircle(
-                                        color = if (isSelected) Color(0xFF047857) else Color(0xFF10B981),
-                                        radius = if (isSelected) 6.5f else 4.5f,
-                                        center = pt,
-                                        style = Stroke(width = if (isSelected) 3.5f else 2.5f)
-                                    )
-
-                                    // Number on Data Point
-                                    val consumptionText = String.format(Locale.US, "%.1f", r.calculatedConsumption)
-                                    canvas.nativeCanvas.drawText(
-                                        consumptionText,
-                                        pt.x,
-                                        pt.y - 12f,
-                                        if (isSelected) selectedValuePaint else pointValuePaint
-                                    )
-
-                                    // X-Axis Date label below point
-                                    val dateText = axisDateFormat.format(Date(r.timestamp))
-                                    canvas.nativeCanvas.drawText(
-                                        dateText,
-                                        pt.x,
-                                        height - 4f,
-                                        xAxisPaint
-                                    )
                                 }
                             }
                         }

@@ -162,7 +162,7 @@ fun AnalyticsScreen(
     }
 
     // 4. Monthly Expenses Grouping (accurate by yyyy-MM across all available records)
-    var monthlyFilterMode by remember { mutableStateOf("近10月") }
+    var monthlyFilterMode by remember { mutableStateOf("近12月") }
 
     val allMonthlyList = remember(records) {
         val cal = Calendar.getInstance()
@@ -186,8 +186,8 @@ fun AnalyticsScreen(
     }
 
     val monthlyList = remember(allMonthlyList, monthlyFilterMode) {
-        if (monthlyFilterMode == "近10月") {
-            allMonthlyList.takeLast(10)
+        if (monthlyFilterMode == "近12月") {
+            allMonthlyList.takeLast(12)
         } else {
             allMonthlyList
         }
@@ -197,14 +197,13 @@ fun AnalyticsScreen(
         if (monthlyList.isNotEmpty()) monthlyList.map { it.totalCost }.average() else 0.0
     }
 
-    // Monthly chart pan and zoom state
-    var barZoomLevel by remember { mutableStateOf(1.0f) }
+    // Monthly chart pan state
     var barScrollOffset by remember { mutableStateOf(0f) }
     var selectedMonthItem by remember { mutableStateOf<MonthExpenseItem?>(null) }
 
     LaunchedEffect(monthlyList) {
         selectedMonthItem = monthlyList.lastOrNull()
-        barScrollOffset = if (monthlyList.size <= 10) 0f else -99999f
+        barScrollOffset = if (monthlyList.size <= 12) 0f else -99999f
     }
 
     val activeMonthItem = selectedMonthItem ?: monthlyList.lastOrNull()
@@ -550,80 +549,30 @@ fun AnalyticsScreen(
                         )
                     }
 
+                    // Filter pill (近12月 / 全部)
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                            .clickable {
+                                monthlyFilterMode = if (monthlyFilterMode == "近12月") "全部" else "近12月"
+                            }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Filter pill (近10月 / 全部)
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                                .clickable {
-                                    monthlyFilterMode = if (monthlyFilterMode == "近10月") "全部" else "近10月"
-                                }
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = monthlyFilterMode,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-
-                        // Zoom buttons (Clean text & icon without circular bubble background)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "缩放",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clickable { barZoomLevel = (barZoomLevel - 0.25f).coerceAtLeast(0.5f) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Remove,
-                                    contentDescription = "缩小",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                            }
-                            Text(
-                                text = "${(barZoomLevel * 100).roundToInt()}%",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clickable { barZoomLevel = (barZoomLevel + 0.25f).coerceAtMost(3.0f) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "放大",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
+                        Text(
+                            text = monthlyFilterMode,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
                     }
                 }
 
@@ -696,18 +645,17 @@ fun AnalyticsScreen(
                         Canvas(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .pointerInput(monthlyList, barZoomLevel) {
+                                .pointerInput(monthlyList) {
                                     detectTapGestures { tapOffset ->
                                         val viewportW = size.width.toFloat()
                                         val paddingLeft = 36.dp.toPx()
                                         val paddingRight = 16.dp.toPx()
                                         val availableW = (viewportW - paddingLeft - paddingRight).coerceAtLeast(100f)
-                                        val baseSlotW = if (monthlyList.size <= 10) {
+                                        val slotW = if (monthlyList.size <= 12) {
                                             availableW / monthlyList.size.coerceAtLeast(1)
                                         } else {
-                                            48.dp.toPx()
+                                            44.dp.toPx()
                                         }
-                                        val slotW = baseSlotW * barZoomLevel
                                         val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                         val currentOffset = barScrollOffset.coerceIn(-maxScroll, 0f)
@@ -718,18 +666,17 @@ fun AnalyticsScreen(
                                         }
                                     }
                                 }
-                                .pointerInput(monthlyList, barZoomLevel) {
+                                .pointerInput(monthlyList) {
                                     detectHorizontalDragGestures { _, dragAmount ->
                                         val viewportW = size.width.toFloat()
                                         val paddingLeft = 36.dp.toPx()
                                         val paddingRight = 16.dp.toPx()
                                         val availableW = (viewportW - paddingLeft - paddingRight).coerceAtLeast(100f)
-                                        val baseSlotW = if (monthlyList.size <= 10) {
+                                        val slotW = if (monthlyList.size <= 12) {
                                             availableW / monthlyList.size.coerceAtLeast(1)
                                         } else {
-                                            48.dp.toPx()
+                                            44.dp.toPx()
                                         }
-                                        val slotW = baseSlotW * barZoomLevel
                                         val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
                                         barScrollOffset = (barScrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
@@ -745,13 +692,12 @@ fun AnalyticsScreen(
                             val paddingLeft = 36.dp.toPx()
                             val paddingRight = 16.dp.toPx()
                             val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
-                            val baseSlotW = if (monthlyList.size <= 10) {
+                            val slotW = if (monthlyList.size <= 12) {
                                 availableW / monthlyList.size.coerceAtLeast(1)
                             } else {
-                                48.dp.toPx()
+                                44.dp.toPx()
                             }
-                            val slotW = baseSlotW * barZoomLevel
-                            val barW = (slotW * 0.48f).coerceIn(16f, 36f)
+                            val barW = (slotW * 0.48f).coerceIn(14f, 32f)
 
                             val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                             val maxScroll = (totalW - width).coerceAtLeast(0f)
@@ -820,7 +766,7 @@ fun AnalyticsScreen(
                                 }
                             }
 
-                            // 3. Draw Bars, Top Amounts, and Bottom Month Labels
+                            // 3. Draw Bars, Top Amounts, and Bottom Month Labels (Clipped to prevent bleeding over Y-axis)
                             val textPaint = android.graphics.Paint().apply {
                                 color = android.graphics.Color.DKGRAY
                                 textSize = 20f
@@ -836,51 +782,53 @@ fun AnalyticsScreen(
                                 isAntiAlias = true
                             }
 
-                            monthlyList.forEachIndexed { i, item ->
-                                val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
-                                if (centerX >= -barW && centerX <= width + barW) {
-                                    val isSelected = (selectedMonthItem == item) || (selectedMonthItem == null && i == monthlyList.size - 1)
-                                    val barH = ((item.totalCost / maxCost) * graphHeight).toFloat().coerceAtLeast(6f)
-                                    val topY = paddingTop + graphHeight - barH
+                            clipRect(left = paddingLeft - 2f, top = 0f, right = width + 10f, bottom = height) {
+                                monthlyList.forEachIndexed { i, item ->
+                                    val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
+                                    if (centerX >= -barW && centerX <= width + barW) {
+                                        val isSelected = (selectedMonthItem == item) || (selectedMonthItem == null && i == monthlyList.size - 1)
+                                        val barH = ((item.totalCost / maxCost) * graphHeight).toFloat().coerceAtLeast(6f)
+                                        val topY = paddingTop + graphHeight - barH
 
-                                    val barColor = if (isSelected) Color(0xFF10B981) else Color(0xFF10B981).copy(alpha = 0.45f)
+                                        val barColor = if (isSelected) Color(0xFF10B981) else Color(0xFF10B981).copy(alpha = 0.45f)
 
-                                    drawRoundRect(
-                                        color = barColor,
-                                        topLeft = Offset(centerX - barW / 2, topY),
-                                        size = Size(barW, barH),
-                                        cornerRadius = CornerRadius(6f, 6f)
-                                    )
-
-                                    drawIntoCanvas { canvas ->
-                                        // Amount on top of each bar
-                                        canvas.nativeCanvas.drawText(
-                                            item.totalCost.roundToInt().toString(),
-                                            centerX,
-                                            topY - 6f,
-                                            textPaint
+                                        drawRoundRect(
+                                            color = barColor,
+                                            topLeft = Offset(centerX - barW / 2, topY),
+                                            size = Size(barW, barH),
+                                            cornerRadius = CornerRadius(6f, 6f)
                                         )
 
-                                        // Month label below each bar (X-axis)
-                                        val monthNum = try { item.key.substring(5).toInt() } catch (_: Exception) { 1 }
-                                        val yearStr = try { item.key.substring(2, 4) } catch (_: Exception) { "" }
-                                        val monthLabel = if (monthNum == 1 || i == 0) "${yearStr}年${monthNum}月" else "${monthNum}月"
+                                        drawIntoCanvas { canvas ->
+                                            // Amount on top of each bar
+                                            canvas.nativeCanvas.drawText(
+                                                item.totalCost.roundToInt().toString(),
+                                                centerX,
+                                                topY - 6f,
+                                                textPaint
+                                            )
 
-                                        canvas.nativeCanvas.drawText(
-                                            monthLabel,
-                                            centerX,
-                                            height - 6f,
-                                            labelPaint
-                                        )
-                                    }
+                                            // Month label below each bar (X-axis)
+                                            val monthNum = try { item.key.substring(5).toInt() } catch (_: Exception) { 1 }
+                                            val yearStr = try { item.key.substring(2, 4) } catch (_: Exception) { "" }
+                                            val monthLabel = if (monthNum == 1 || i == 0) "${yearStr}年${monthNum}月" else "${monthNum}月"
 
-                                    if (isSelected) {
-                                        // Indicator dot below selected bar
-                                        drawCircle(
-                                            color = Color(0xFF059669),
-                                            radius = 3.5f,
-                                            center = Offset(centerX, height - 1f)
-                                        )
+                                            canvas.nativeCanvas.drawText(
+                                                monthLabel,
+                                                centerX,
+                                                height - 6f,
+                                                labelPaint
+                                            )
+                                        }
+
+                                        if (isSelected) {
+                                            // Indicator dot below selected bar
+                                            drawCircle(
+                                                color = Color(0xFF059669),
+                                                radius = 3.5f,
+                                                center = Offset(centerX, height - 1f)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -899,8 +847,7 @@ fun AnalyticsScreen(
                             QuickJumpPill(
                                 label = "本月",
                                 onClick = {
-                                    val slotW = 55.dp.value * barZoomLevel
-                                    barScrollOffset = -monthlyList.size * slotW * 2f
+                                    barScrollOffset = -99999f
                                     selectedMonthItem = monthlyList.lastOrNull()
                                 }
                             )
@@ -918,11 +865,13 @@ fun AnalyticsScreen(
                             )
                         }
 
-                        Text(
-                            text = "👈 左右拖动查看 ${monthlyList.size} 个月数据 👉",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                        )
+                        if (monthlyList.size > 12) {
+                            Text(
+                                text = "👈 左右拖动查看 ${monthlyList.size} 个月数据 👉",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                            )
+                        }
                     }
                 }
             }
