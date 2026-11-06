@@ -57,15 +57,19 @@ jobs:
         if: success()
         run: |
           mkdir -p release-output
-          cp app/build/outputs/apk/debug/app-debug.apk release-output/FuelTracker-v0.3.1-beta-Build4.apk
+          TAG_OR_REF="${GITHUB_REF_NAME}"
+          if [ -z "$TAG_OR_REF" ] || [ "$TAG_OR_REF" = "main" ] || [ "$TAG_OR_REF" = "master" ]; then
+            TAG_OR_REF="latest"
+          fi
+          cp app/build/outputs/apk/debug/app-debug.apk "release-output/FuelTracker-${TAG_OR_REF}.apk"
         shell: bash
 
       - name: Upload APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: FuelTracker-v0.3.1-beta-Build4
-          path: release-output/FuelTracker-v0.3.1-beta-Build4.apk
+          name: FuelTracker-APK
+          path: release-output/*.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -75,5 +79,6 @@ jobs:
         with:
           files: release-output/*.apk
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

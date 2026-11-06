@@ -47,6 +47,12 @@ fun SettingsScreen(
     var updateInfoToShow by remember { mutableStateOf<com.fueltracker.app.data.update.UpdateInfo?>(null) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
+    var includeBetaUpdates by remember {
+        mutableStateOf(
+            context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+                .getBoolean("include_beta_updates", true)
+        )
+    }
 
     // SAF Launchers for Export and Import
     val exportJsonLauncher = rememberLauncherForActivityResult(
@@ -340,7 +346,9 @@ fun SettingsScreen(
                         onClick = {
                             isCheckingUpdate = true
                             coroutineScope.launch {
-                                val result = com.fueltracker.app.data.update.AppUpdateManager.checkForUpdates()
+                                val result = com.fueltracker.app.data.update.AppUpdateManager.checkForUpdates(
+                                    includeBeta = includeBetaUpdates
+                                )
                                 isCheckingUpdate = false
                                 if (result.isSuccess) {
                                     val info = result.getOrThrow()
@@ -366,6 +374,62 @@ fun SettingsScreen(
                             Text("检查更新 🔄", fontSize = 11.sp, color = Color(0xFF059669))
                         }
                     }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "接收 Beta 测试版更新",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFF59E0B).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "测试通道",
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFD97706)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "开启后可优先检测并升级至包含最新特性的测试版本",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    Switch(
+                        checked = includeBetaUpdates,
+                        onCheckedChange = { checked ->
+                            includeBetaUpdates = checked
+                            context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("include_beta_updates", checked)
+                                .apply()
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF10B981)
+                        )
+                    )
                 }
 
                 HorizontalDivider(
@@ -496,6 +560,21 @@ fun SettingsScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF059669)
                     )
+                    if (info.isBeta) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Beta 测试版",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFD97706)
+                            )
+                        }
+                    }
                 }
             },
             text = {
@@ -506,6 +585,22 @@ fun SettingsScreen(
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+
+                    if (info.isBeta) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFEF3C7)
+                        ) {
+                            Text(
+                                text = "💡 此版本为公开测试版 (Beta)，包含最新特性体验。",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                fontSize = 11.sp,
+                                color = Color(0xFF92400E)
+                            )
+                        }
+                    }
 
                     Box(
                         modifier = Modifier
