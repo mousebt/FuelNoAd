@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -220,12 +221,14 @@ fun MonthlyExpenseChart(
                             isAntiAlias = true
                             isFakeBoldText = true
                         }
-                        drawContext.canvas.nativeCanvas.drawText(
-                            String.format(Locale.US, "%.1f", avgMonthlyExpense),
-                            width - 8f,
-                            avgY - 6f,
-                            paint
-                        )
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawText(
+                                String.format(Locale.US, "%.1f", avgMonthlyExpense),
+                                width - 8f,
+                                avgY - 6f,
+                                paint
+                            )
+                        }
                     }
 
                     // Draw Bars, Top Amounts, and Bottom Month Labels
@@ -259,21 +262,23 @@ fun MonthlyExpenseChart(
                                 cornerRadius = CornerRadius(6f, 6f)
                             )
 
-                            // Top amount
-                            drawContext.canvas.nativeCanvas.drawText(
-                                amount.roundToInt().toString(),
-                                centerX,
-                                topY - 8f,
-                                textPaint
-                            )
+                            drawIntoCanvas { canvas ->
+                                // Top amount
+                                canvas.nativeCanvas.drawText(
+                                    amount.roundToInt().toString(),
+                                    centerX,
+                                    topY - 8f,
+                                    textPaint
+                                )
 
-                            // Bottom month label
-                            drawContext.canvas.nativeCanvas.drawText(
-                                label,
-                                centerX,
-                                height - 4f,
-                                labelPaint
-                            )
+                                // Bottom month label
+                                canvas.nativeCanvas.drawText(
+                                    label,
+                                    centerX,
+                                    height - 4f,
+                                    labelPaint
+                                )
+                            }
                         }
                     }
                 }

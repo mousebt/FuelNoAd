@@ -533,7 +533,7 @@ fun SettingsScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             LinearProgressIndicator(
-                                progress = { downloadProgress },
+                                progress = downloadProgress,
                                 modifier = Modifier.fillMaxWidth(),
                                 color = Color(0xFF10B981)
                             )
