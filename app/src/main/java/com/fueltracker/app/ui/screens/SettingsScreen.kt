@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fueltracker.app.model.Vehicle
 import com.fueltracker.app.ui.viewmodel.FuelViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
