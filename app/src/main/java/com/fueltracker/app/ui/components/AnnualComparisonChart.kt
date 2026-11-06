@@ -15,11 +15,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fueltracker.app.model.FuelRecord
 import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun AnnualComparisonChart(
@@ -40,7 +42,6 @@ fun AnnualComparisonChart(
             list.add(r.calculatedConsumption!!)
         }
 
-        // Return year -> (month -> avgConsumption)
         map.mapValues { (_, monthMap) ->
             monthMap.mapValues { (_, list) -> list.average() }
         }
@@ -51,11 +52,9 @@ fun AnnualComparisonChart(
     }
 
     if (availableYears.size < 2) {
-        // Less than 2 years of data, don't show or show subtle card
         return
     }
 
-    // Pick top 2 years for comparison (e.g. 2026 & 2025)
     val year1 = availableYears[0] // e.g. 2026
     val year2 = availableYears[1] // e.g. 2025
 
@@ -119,40 +118,82 @@ fun AnnualComparisonChart(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .height(170.dp)
             ) {
                 val width = size.width
                 val height = size.height
-                val paddingTop = 15f
-                val paddingBottom = 30f
+                val paddingTop = 26f
+                val paddingBottom = 26f
                 val graphHeight = height - paddingTop - paddingBottom
-                val paddingLeft = 30f
-                val paddingRight = 20f
+                val paddingLeft = 38.dp.toPx()
+                val paddingRight = 16.dp.toPx()
                 val graphWidth = width - paddingLeft - paddingRight
 
-                // Draw Y-axis dotted grid lines
-                val gridSteps = 4
-                for (s in 0..gridSteps) {
-                    val y = paddingTop + (graphHeight / gridSteps) * s
-                    val value = maxVal - (s.toFloat() / gridSteps) * (maxVal - minVal)
-                    drawLine(
-                        color = Color.LightGray.copy(alpha = 0.35f),
-                        start = Offset(paddingLeft, y),
-                        end = Offset(width - paddingRight, y),
-                        strokeWidth = 1.5f,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                    )
+                val yAxisPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.GRAY
+                    textSize = 21f
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.RIGHT
                 }
 
-                fun getPointsForYear(data: Map<Int, Double>): List<Offset> {
-                    val points = mutableListOf<Offset>()
+                val xAxisPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.GRAY
+                    textSize = 20f
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                }
+
+                val bluePointPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.parseColor("#2563EB")
+                    textSize = 20f
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isFakeBoldText = true
+                }
+
+                val pinkPointPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.parseColor("#DB2777")
+                    textSize = 20f
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isFakeBoldText = true
+                }
+
+                // 1. Draw Y-axis dotted grid lines and Y-axis values
+                val gridSteps = 4
+                drawIntoCanvas { canvas ->
+                    for (s in 0..gridSteps) {
+                        val y = paddingTop + (graphHeight / gridSteps) * s
+                        val value = maxVal - (s.toFloat() / gridSteps) * (maxVal - minVal)
+
+                        drawLine(
+                            color = Color.LightGray.copy(alpha = 0.35f),
+                            start = Offset(paddingLeft - 4f, y),
+                            end = Offset(width - paddingRight, y),
+                            strokeWidth = 1.5f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                        )
+
+                        canvas.nativeCanvas.drawText(
+                            String.format(Locale.US, "%.1f", value),
+                            paddingLeft - 8f,
+                            y + 7f,
+                            yAxisPaint
+                        )
+                    }
+                }
+
+                data class MonthPoint(val month: Int, val value: Double, val offset: Offset)
+
+                fun getPointsForYear(data: Map<Int, Double>): List<MonthPoint> {
+                    val points = mutableListOf<MonthPoint>()
                     for (m in 1..12) {
                         val v = data[m]
                         if (v != null) {
                             val x = paddingLeft + ((m - 1).toFloat() / 11f) * graphWidth
                             val ratio = ((v - minVal) / (maxVal - minVal)).toFloat()
                             val y = paddingTop + graphHeight - (ratio * graphHeight)
-                            points.add(Offset(x, y))
+                            points.add(MonthPoint(m, v, Offset(x, y)))
                         }
                     }
                     return points
@@ -161,13 +202,13 @@ fun AnnualComparisonChart(
                 val pointsYear2 = getPointsForYear(year2Data) // Older year (Blue)
                 val pointsYear1 = getPointsForYear(year1Data) // Newer year (Pink)
 
-                // Draw lines and dots for older year (Blue: #3B82F6)
+                // 2. Draw lines, dots, and numbers for older year (Blue: #3B82F6)
                 if (pointsYear2.size >= 2) {
                     val path2 = Path().apply {
-                        moveTo(pointsYear2[0].x, pointsYear2[0].y)
+                        moveTo(pointsYear2[0].offset.x, pointsYear2[0].offset.y)
                         for (i in 1 until pointsYear2.size) {
-                            val prev = pointsYear2[i - 1]
-                            val curr = pointsYear2[i]
+                            val prev = pointsYear2[i - 1].offset
+                            val curr = pointsYear2[i].offset
                             val midX = (prev.x + curr.x) / 2
                             cubicTo(midX, prev.y, midX, curr.y, curr.x, curr.y)
                         }
@@ -175,21 +216,17 @@ fun AnnualComparisonChart(
                     drawPath(
                         path = path2,
                         color = Color(0xFF3B82F6),
-                        style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
-                    pointsYear2.forEach { pt ->
-                        drawCircle(color = Color.White, radius = 5f, center = pt)
-                        drawCircle(color = Color(0xFF3B82F6), radius = 5f, center = pt, style = Stroke(width = 2.5f))
-                    }
                 }
 
-                // Draw lines and dots for newer year (Magenta: #EC4899)
+                // 3. Draw lines, dots, and numbers for newer year (Magenta: #EC4899)
                 if (pointsYear1.size >= 2) {
                     val path1 = Path().apply {
-                        moveTo(pointsYear1[0].x, pointsYear1[0].y)
+                        moveTo(pointsYear1[0].offset.x, pointsYear1[0].offset.y)
                         for (i in 1 until pointsYear1.size) {
-                            val prev = pointsYear1[i - 1]
-                            val curr = pointsYear1[i]
+                            val prev = pointsYear1[i - 1].offset
+                            val curr = pointsYear1[i].offset
                             val midX = (prev.x + curr.x) / 2
                             cubicTo(midX, prev.y, midX, curr.y, curr.x, curr.y)
                         }
@@ -197,28 +234,46 @@ fun AnnualComparisonChart(
                     drawPath(
                         path = path1,
                         color = Color(0xFFEC4899),
-                        style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
-                    pointsYear1.forEach { pt ->
-                        drawCircle(color = Color.White, radius = 5f, center = pt)
-                        drawCircle(color = Color(0xFFEC4899), radius = 5f, center = pt, style = Stroke(width = 2.5f))
-                    }
                 }
-            }
 
-            // Month Labels (1月, 3月, 6月, 9月, 12月)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                listOf("1月", "3月", "6月", "9月", "12月").forEach { m ->
-                    Text(
-                        text = m,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                // Draw dots and numbers on data points
+                drawIntoCanvas { canvas ->
+                    pointsYear2.forEach { mp ->
+                        drawCircle(color = Color.White, radius = 5f, center = mp.offset)
+                        drawCircle(color = Color(0xFF3B82F6), radius = 5f, center = mp.offset, style = Stroke(width = 2.5f))
+
+                        canvas.nativeCanvas.drawText(
+                            String.format(Locale.US, "%.1f", mp.value),
+                            mp.offset.x,
+                            mp.offset.y - 10f,
+                            bluePointPaint
+                        )
+                    }
+
+                    pointsYear1.forEach { mp ->
+                        drawCircle(color = Color.White, radius = 5f, center = mp.offset)
+                        drawCircle(color = Color(0xFFEC4899), radius = 5f, center = mp.offset, style = Stroke(width = 2.5f))
+
+                        canvas.nativeCanvas.drawText(
+                            String.format(Locale.US, "%.1f", mp.value),
+                            mp.offset.x,
+                            mp.offset.y - 10f,
+                            pinkPointPaint
+                        )
+                    }
+
+                    // 4. Draw X-axis month numbers at bottom (1月 ~ 12月)
+                    for (m in 1..12) {
+                        val x = paddingLeft + ((m - 1).toFloat() / 11f) * graphWidth
+                        canvas.nativeCanvas.drawText(
+                            "${m}月",
+                            x,
+                            height - 4f,
+                            xAxisPaint
+                        )
+                    }
                 }
             }
 

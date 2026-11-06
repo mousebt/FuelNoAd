@@ -168,11 +168,13 @@ fun MonthlyExpenseChart(
                         .pointerInput(monthlyItems) {
                             detectTapGestures { tapOffset ->
                                 val slotW = 46.dp.toPx()
-                                val totalW = monthlyItems.size * slotW + 2 * 16.dp.toPx()
+                                val paddingLeft = 36.dp.toPx()
+                                val paddingRight = 16.dp.toPx()
+                                val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
 
-                                val idx = ((tapOffset.x - currentOffset - 16.dp.toPx()) / slotW).toInt()
+                                val idx = ((tapOffset.x - currentOffset - paddingLeft) / slotW).toInt()
                                 if (idx in monthlyItems.indices) {
                                     selectedItemIndex = idx
                                 }
@@ -181,7 +183,9 @@ fun MonthlyExpenseChart(
                         .pointerInput(monthlyItems) {
                             detectHorizontalDragGestures { _, dragAmount ->
                                 val slotW = 46.dp.toPx()
-                                val totalW = monthlyItems.size * slotW + 2 * 16.dp.toPx()
+                                val paddingLeft = 36.dp.toPx()
+                                val paddingRight = 16.dp.toPx()
+                                val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
                             }
@@ -194,20 +198,52 @@ fun MonthlyExpenseChart(
                     val graphHeight = height - paddingTop - paddingBottom
                     val slotW = 46.dp.toPx()
                     val barW = 24.dp.toPx()
-                    val paddingSide = 16.dp.toPx()
+                    val paddingLeft = 36.dp.toPx()
+                    val paddingRight = 16.dp.toPx()
 
-                    val totalW = monthlyItems.size * slotW + 2 * paddingSide
+                    val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                     val maxScroll = (totalW - width).coerceAtLeast(0f)
                     if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
                     if (scrollOffset > 0f) scrollOffset = 0f
                     val currentOffset = scrollOffset
+
+                    val yAxisPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.GRAY
+                        textSize = 20f
+                        textAlign = android.graphics.Paint.Align.RIGHT
+                        isAntiAlias = true
+                    }
+
+                    // Draw Horizontal Dotted Grid Lines and Y-Axis Values
+                    val gridSteps = 3
+                    drawIntoCanvas { canvas ->
+                        for (s in 0..gridSteps) {
+                            val y = paddingTop + (graphHeight / gridSteps) * s
+                            val scaleVal = maxAmount - (s.toFloat() / gridSteps) * maxAmount
+
+                            drawLine(
+                                color = Color.LightGray.copy(alpha = 0.3f),
+                                start = Offset(paddingLeft - 4f, y),
+                                end = Offset(width, y),
+                                strokeWidth = 1.5f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                            )
+
+                            canvas.nativeCanvas.drawText(
+                                scaleVal.roundToInt().toString(),
+                                paddingLeft - 6f,
+                                y + 7f,
+                                yAxisPaint
+                            )
+                        }
+                    }
 
                     // Draw Average dashed red line
                     if (avgMonthlyExpense > 0) {
                         val avgY = paddingTop + graphHeight - ((avgMonthlyExpense / maxAmount) * graphHeight).toFloat()
                         drawLine(
                             color = Color(0xFFF43F5E).copy(alpha = 0.8f),
-                            start = Offset(0f, avgY),
+                            start = Offset(paddingLeft - 4f, avgY),
                             end = Offset(width, avgY),
                             strokeWidth = 2f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
@@ -216,14 +252,14 @@ fun MonthlyExpenseChart(
                         // Draw avg label on right using native paint
                         val paint = android.graphics.Paint().apply {
                             color = android.graphics.Color.parseColor("#F43F5E")
-                            textSize = 24f
+                            textSize = 22f
                             textAlign = android.graphics.Paint.Align.RIGHT
                             isAntiAlias = true
                             isFakeBoldText = true
                         }
                         drawIntoCanvas { canvas ->
                             canvas.nativeCanvas.drawText(
-                                String.format(Locale.US, "%.1f", avgMonthlyExpense),
+                                "月均 ${String.format(Locale.US, "%.0f", avgMonthlyExpense)}",
                                 width - 8f,
                                 avgY - 6f,
                                 paint
@@ -234,20 +270,20 @@ fun MonthlyExpenseChart(
                     // Draw Bars, Top Amounts, and Bottom Month Labels
                     val textPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.DKGRAY
-                        textSize = 22f
+                        textSize = 21f
                         textAlign = android.graphics.Paint.Align.CENTER
                         isAntiAlias = true
                     }
 
                     val labelPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.GRAY
-                        textSize = 22f
+                        textSize = 20f
                         textAlign = android.graphics.Paint.Align.CENTER
                         isAntiAlias = true
                     }
 
                     monthlyItems.forEachIndexed { i, (_, label, amount) ->
-                        val centerX = paddingSide + i * slotW + (slotW / 2) + currentOffset
+                        val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
                         if (centerX >= -barW && centerX <= width + barW) {
                             val barH = ((amount / maxAmount) * graphHeight).toFloat().coerceAtLeast(4f)
                             val topY = paddingTop + graphHeight - barH

@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -21,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -130,9 +130,9 @@ fun FuelTrendChart(
             }
 
             val dateFormat = remember { SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()) }
-            val shortDateFormat = remember { SimpleDateFormat("yy/MM", Locale.getDefault()) }
+            val axisDateFormat = remember { SimpleDateFormat("MM/dd", Locale.getDefault()) }
 
-            // Header Row: Title & Filter / Zoom controls
+            // Header Row: Title & Filter / Clean Zoom controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -199,28 +199,37 @@ fun FuelTrendChart(
                         }
                     }
 
-                    // Zoom (+ / -)
+                    // Clean Zoom controls (No circular bubble background)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        Text(
+                            text = "缩放:",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
                         IconButton(
                             onClick = { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.5f) },
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                            modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Remove, contentDescription = "缩小", modifier = Modifier.size(12.dp))
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "缩小",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
                         }
                         IconButton(
                             onClick = { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3.0f) },
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                            modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "放大", modifier = Modifier.size(12.dp))
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "放大",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
                         }
                     }
                 }
@@ -228,7 +237,7 @@ fun FuelTrendChart(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Tooltip Card hovering / preview panel
+            // Tooltip preview panel
             if (activeRecord != null) {
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -279,27 +288,28 @@ fun FuelTrendChart(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Chart Canvas
+            // Chart Canvas with X/Y Axis values and Point Numbers
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(180.dp)
             ) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(validRecords, zoomLevel) {
                             detectTapGestures { tapOffset ->
-                                val viewportW = size.width.toFloat()
-                                val pointSpacing = 50.dp.toPx() * zoomLevel
-                                val totalW = (validRecords.size - 1) * pointSpacing + 2 * 36.dp.toPx()
-                                val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
+                                val pointSpacing = 52.dp.toPx() * zoomLevel
+                                val paddingLeft = 38.dp.toPx()
+                                val paddingRight = 20.dp.toPx()
+                                val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
+                                val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
 
                                 var closestIdx = -1
                                 var minDiff = Float.MAX_VALUE
                                 validRecords.indices.forEach { i ->
-                                    val ptX = 36.dp.toPx() + i * pointSpacing + currentOffset
+                                    val ptX = paddingLeft + i * pointSpacing + currentOffset
                                     val diff = abs(ptX - tapOffset.x)
                                     if (diff < minDiff && diff < pointSpacing) {
                                         minDiff = diff
@@ -313,10 +323,11 @@ fun FuelTrendChart(
                         }
                         .pointerInput(validRecords, zoomLevel) {
                             detectHorizontalDragGestures { _, dragAmount ->
-                                val viewportW = size.width.toFloat()
-                                val pointSpacing = 50.dp.toPx() * zoomLevel
-                                val totalW = (validRecords.size - 1) * pointSpacing + 2 * 36.dp.toPx()
-                                val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
+                                val pointSpacing = 52.dp.toPx() * zoomLevel
+                                val paddingLeft = 38.dp.toPx()
+                                val paddingRight = 20.dp.toPx()
+                                val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
+                                val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
                                 scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
                             }
                         }
@@ -324,13 +335,14 @@ fun FuelTrendChart(
                     val width = size.width
                     val height = size.height
 
-                    val paddingTop = 15f
-                    val paddingBottom = 30f
+                    val paddingTop = 26f
+                    val paddingBottom = 26f
                     val graphHeight = height - paddingTop - paddingBottom
-                    val pointSpacing = 50.dp.toPx() * zoomLevel
-                    val paddingSide = 36.dp.toPx()
+                    val paddingLeft = 38.dp.toPx() // Room for Y-axis numbers
+                    val paddingRight = 20.dp.toPx()
+                    val pointSpacing = 52.dp.toPx() * zoomLevel
 
-                    val totalContentWidth = (validRecords.size - 1) * pointSpacing + 2 * paddingSide
+                    val totalContentWidth = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                     val maxScroll = (totalContentWidth - width).coerceAtLeast(0f)
 
                     if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
@@ -338,39 +350,83 @@ fun FuelTrendChart(
 
                     val currentOffset = scrollOffset
 
-                    // Draw Horizontal Dotted Grid Lines (5, 6, 7, 8, 9)
-                    val gridSteps = 4
-                    for (s in 0..gridSteps) {
-                        val y = paddingTop + (graphHeight / gridSteps) * s
-                        drawLine(
-                            color = Color.LightGray.copy(alpha = 0.35f),
-                            start = Offset(0f, y),
-                            end = Offset(width, y),
-                            strokeWidth = 1.5f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                        )
+                    // Text Paints for Y-axis, X-axis, and Data Points
+                    val yAxisPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.GRAY
+                        textSize = 21f
+                        isAntiAlias = true
+                        textAlign = android.graphics.Paint.Align.RIGHT
                     }
 
-                    // Draw Average Reference Line (Yellow / Orange Dashed)
+                    val pointValuePaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.parseColor("#059669")
+                        textSize = 21f
+                        isAntiAlias = true
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isFakeBoldText = true
+                    }
+
+                    val selectedValuePaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.parseColor("#047857")
+                        textSize = 24f
+                        isAntiAlias = true
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isFakeBoldText = true
+                    }
+
+                    val xAxisPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.GRAY
+                        textSize = 20f
+                        isAntiAlias = true
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+
+                    // 1. Draw Horizontal Dotted Grid Lines and Y-Axis Scale Values
+                    val gridSteps = 4
+                    drawIntoCanvas { canvas ->
+                        for (s in 0..gridSteps) {
+                            val y = paddingTop + (graphHeight / gridSteps) * s
+                            val scaleVal = maxVal - (s.toFloat() / gridSteps) * (maxVal - minVal)
+
+                            // Horizontal dashed line
+                            drawLine(
+                                color = Color.LightGray.copy(alpha = 0.35f),
+                                start = Offset(paddingLeft - 4f, y),
+                                end = Offset(width, y),
+                                strokeWidth = 1.5f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                            )
+
+                            // Y-axis label text on the left
+                            canvas.nativeCanvas.drawText(
+                                String.format(Locale.US, "%.1f", scaleVal),
+                                paddingLeft - 8f,
+                                y + 7f,
+                                yAxisPaint
+                            )
+                        }
+                    }
+
+                    // 2. Draw Average Reference Line (Yellow / Orange Dashed)
                     val avgRatio = ((avgConsumption - minVal) / (maxVal - minVal)).toFloat().coerceIn(0f, 1f)
                     val avgY = paddingTop + graphHeight - (avgRatio * graphHeight)
                     drawLine(
-                        color = Color(0xFFF59E0B).copy(alpha = 0.75f),
-                        start = Offset(0f, avgY),
+                        color = Color(0xFFF59E0B).copy(alpha = 0.8f),
+                        start = Offset(paddingLeft - 4f, avgY),
                         end = Offset(width, avgY),
                         strokeWidth = 2.5f,
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
                     )
 
-                    // Point Coordinates
+                    // 3. Point Coordinates
                     val points = validRecords.indices.map { i ->
-                        val x = paddingSide + i * pointSpacing + currentOffset
+                        val x = paddingLeft + i * pointSpacing + currentOffset
                         val ratio = ((validRecords[i].calculatedConsumption!! - minVal) / (maxVal - minVal)).toFloat()
                         val y = paddingTop + graphHeight - (ratio * graphHeight)
                         Offset(x, y)
                     }
 
-                    // Cubic Bezier Curve
+                    // 4. Cubic Bezier Curve
                     if (points.isNotEmpty()) {
                         val path = Path().apply {
                             moveTo(points[0].x, points[0].y)
@@ -405,43 +461,58 @@ fun FuelTrendChart(
                         drawPath(
                             path = path,
                             color = Color(0xFF10B981),
-                            style = Stroke(width = 5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            style = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                         )
 
-                        // Points & guidelines
-                        points.forEachIndexed { i, pt ->
-                            if (pt.x >= -30f && pt.x <= width + 30f) {
-                                val isSelected = (i == selectedIndex) || (selectedIndex == null && i == points.size - 1)
+                        // 5. Draw Points, Numbers on Points, Guidelines, and X-Axis Dates
+                        drawIntoCanvas { canvas ->
+                            points.forEachIndexed { i, pt ->
+                                if (pt.x >= paddingLeft - 20f && pt.x <= width + 20f) {
+                                    val isSelected = (i == selectedIndex) || (selectedIndex == null && i == points.size - 1)
+                                    val r = validRecords[i]
 
-                                if (isSelected) {
-                                    // Vertical guideline
-                                    drawLine(
-                                        color = Color(0xFF10B981).copy(alpha = 0.5f),
-                                        start = Offset(pt.x, paddingTop),
-                                        end = Offset(pt.x, paddingTop + graphHeight),
-                                        strokeWidth = 2f,
-                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                                    )
+                                    if (isSelected) {
+                                        // Vertical guideline (no outer halo ring)
+                                        drawLine(
+                                            color = Color(0xFF10B981).copy(alpha = 0.5f),
+                                            start = Offset(pt.x, paddingTop),
+                                            end = Offset(pt.x, paddingTop + graphHeight),
+                                            strokeWidth = 2f,
+                                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                                        )
+                                    }
 
-                                    // Outer ring
+                                    // Crisp Clean Dot (no big halo circle)
                                     drawCircle(
-                                        color = Color(0xFF10B981).copy(alpha = 0.25f),
-                                        radius = 16f,
+                                        color = Color.White,
+                                        radius = if (isSelected) 6.5f else 4.5f,
                                         center = pt
                                     )
-                                }
+                                    drawCircle(
+                                        color = if (isSelected) Color(0xFF047857) else Color(0xFF10B981),
+                                        radius = if (isSelected) 6.5f else 4.5f,
+                                        center = pt,
+                                        style = Stroke(width = if (isSelected) 3.5f else 2.5f)
+                                    )
 
-                                drawCircle(
-                                    color = Color.White,
-                                    radius = if (isSelected) 7.5f else 5f,
-                                    center = pt
-                                )
-                                drawCircle(
-                                    color = if (isSelected) Color(0xFF059669) else Color(0xFF10B981),
-                                    radius = if (isSelected) 7.5f else 5f,
-                                    center = pt,
-                                    style = Stroke(width = if (isSelected) 4f else 3f)
-                                )
+                                    // Number on Data Point
+                                    val consumptionText = String.format(Locale.US, "%.1f", r.calculatedConsumption)
+                                    canvas.nativeCanvas.drawText(
+                                        consumptionText,
+                                        pt.x,
+                                        pt.y - 12f,
+                                        if (isSelected) selectedValuePaint else pointValuePaint
+                                    )
+
+                                    // X-Axis Date label below point
+                                    val dateText = axisDateFormat.format(Date(r.timestamp))
+                                    canvas.nativeCanvas.drawText(
+                                        dateText,
+                                        pt.x,
+                                        height - 4f,
+                                        xAxisPaint
+                                    )
+                                }
                             }
                         }
                     }
@@ -464,22 +535,22 @@ fun FuelTrendChart(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(2.dp))
                                 .background(Color(0xFF10B981))
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("油耗", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text("油耗 (L/100km)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(2.dp))
                                 .background(Color(0xFFF59E0B))
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("平均油耗参考", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text("平均参考: ${String.format(Locale.US, "%.2f", avgConsumption)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
 
