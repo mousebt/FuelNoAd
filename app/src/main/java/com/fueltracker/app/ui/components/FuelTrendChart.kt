@@ -128,14 +128,15 @@ fun FuelTrendChart(
             var zoomLevel by remember { mutableStateOf(1.0f) }
             var scrollOffset by remember { mutableStateOf(0f) }
 
+            // Selected point for inspection
+            var selectedIndex by remember { mutableStateOf<Int?>(null) }
+
             LaunchedEffect(validRecords) {
                 // Focus on the newest record by default
                 selectedIndex = null
                 scrollOffset = if (validRecords.size <= 10) 0f else -99999f
             }
 
-            // Selected point for inspection
-            var selectedIndex by remember { mutableStateOf<Int?>(null) }
             val activeRecord = if (selectedIndex != null && selectedIndex in validRecords.indices) {
                 validRecords[selectedIndex!!]
             } else {
