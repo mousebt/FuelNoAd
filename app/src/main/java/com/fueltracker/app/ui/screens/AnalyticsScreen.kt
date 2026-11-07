@@ -12,11 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -161,11 +157,8 @@ fun AnalyticsScreen(
         if (totalFuelLiters > 0) totalExpense / totalFuelLiters else 0.0
     }
 
-    // 4. Monthly Expenses Grouping (accurate by yyyy-MM across all available records)
-    var monthlyFilterMode by remember { mutableStateOf("近12月") }
-
-    val allMonthlyList = remember(records) {
-        val cal = Calendar.getInstance()
+    // 4. Monthly Expenses Grouping (accurate by yyyy-MM across all available records, chronological ascending)
+    val monthlyList = remember(records) {
         val formatKey = SimpleDateFormat("yyyy-MM", Locale.getDefault())
         val formatLabel = SimpleDateFormat("yy/MM", Locale.getDefault())
         val formatYearMonth = SimpleDateFormat("yyyy年M月", Locale.getDefault())
@@ -185,25 +178,17 @@ fun AnalyticsScreen(
             .sortedBy { it.key } // chronological ascending: oldest first, newest last
     }
 
-    val monthlyList = remember(allMonthlyList, monthlyFilterMode) {
-        if (monthlyFilterMode == "近12月") {
-            allMonthlyList.takeLast(12)
-        } else {
-            allMonthlyList
-        }
-    }
-
     val avgMonthlyExpense = remember(monthlyList) {
         if (monthlyList.isNotEmpty()) monthlyList.map { it.totalCost }.average() else 0.0
     }
 
-    // Monthly chart pan state
-    var barScrollOffset by remember { mutableStateOf(0f) }
+    // Monthly chart pan state (defaults to NEGATIVE_INFINITY to snap to latest 12 months)
+    var barScrollOffset by remember { mutableStateOf(Float.NEGATIVE_INFINITY) }
     var selectedMonthItem by remember { mutableStateOf<MonthExpenseItem?>(null) }
 
-    LaunchedEffect(monthlyList) {
+    LaunchedEffect(monthlyList.size) {
         selectedMonthItem = monthlyList.lastOrNull()
-        barScrollOffset = if (monthlyList.size <= 12) 0f else -99999f
+        barScrollOffset = Float.NEGATIVE_INFINITY
     }
 
     val activeMonthItem = selectedMonthItem ?: monthlyList.lastOrNull()
@@ -549,29 +534,18 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Filter pill (近12月 / 全部)
-                    Row(
+                    // Subtitle Badge
+                    Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                            .clickable {
-                                monthlyFilterMode = if (monthlyFilterMode == "近12月") "全部" else "近12月"
-                            }
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = monthlyFilterMode,
+                            text = "默认近12月 · 可左右拖动",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -651,14 +625,16 @@ fun AnalyticsScreen(
                                         val paddingLeft = 36.dp.toPx()
                                         val paddingRight = 16.dp.toPx()
                                         val availableW = (viewportW - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                        // Exactly 12 columns visible across availableW
                                         val slotW = if (monthlyList.size <= 12) {
                                             availableW / monthlyList.size.coerceAtLeast(1)
                                         } else {
-                                            44.dp.toPx()
+                                            availableW / 12f
                                         }
                                         val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
-                                        val currentOffset = barScrollOffset.coerceIn(-maxScroll, 0f)
+                                        val baseOffset = if (barScrollOffset.isInfinite()) -maxScroll else barScrollOffset
+                                        val currentOffset = baseOffset.coerceIn(-maxScroll, 0f)
 
                                         val tappedIdx = ((tapOffset.x - currentOffset - paddingLeft) / slotW).toInt()
                                         if (tappedIdx in monthlyList.indices) {
@@ -675,11 +651,12 @@ fun AnalyticsScreen(
                                         val slotW = if (monthlyList.size <= 12) {
                                             availableW / monthlyList.size.coerceAtLeast(1)
                                         } else {
-                                            44.dp.toPx()
+                                            availableW / 12f
                                         }
                                         val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                                         val maxScroll = (totalW - viewportW).coerceAtLeast(0f)
-                                        barScrollOffset = (barScrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
+                                        val baseOffset = if (barScrollOffset.isInfinite()) -maxScroll else barScrollOffset
+                                        barScrollOffset = (baseOffset + dragAmount).coerceIn(-maxScroll, 0f)
                                     }
                                 }
                         ) {
@@ -692,19 +669,21 @@ fun AnalyticsScreen(
                             val paddingLeft = 36.dp.toPx()
                             val paddingRight = 16.dp.toPx()
                             val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
+                            // Fixed 12-item visible scale: 12 bars span availableW exactly
                             val slotW = if (monthlyList.size <= 12) {
                                 availableW / monthlyList.size.coerceAtLeast(1)
                             } else {
-                                44.dp.toPx()
+                                availableW / 12f
                             }
                             val barW = (slotW * 0.48f).coerceIn(14f, 32f)
 
                             val totalW = monthlyList.size * slotW + paddingLeft + paddingRight
                             val maxScroll = (totalW - width).coerceAtLeast(0f)
-                            if (barScrollOffset < -maxScroll) barScrollOffset = -maxScroll
-                            if (barScrollOffset > 0f) barScrollOffset = 0f
-
-                            val currentOffset = barScrollOffset
+                            val currentOffset = if (barScrollOffset.isInfinite()) {
+                                -maxScroll
+                            } else {
+                                barScrollOffset.coerceIn(-maxScroll, 0f)
+                            }
 
                             val yAxisPaint = android.graphics.Paint().apply {
                                 color = android.graphics.Color.GRAY
@@ -845,9 +824,9 @@ fun AnalyticsScreen(
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             QuickJumpPill(
-                                label = "本月",
+                                label = "最新",
                                 onClick = {
-                                    barScrollOffset = -99999f
+                                    barScrollOffset = Float.NEGATIVE_INFINITY
                                     selectedMonthItem = monthlyList.lastOrNull()
                                 }
                             )

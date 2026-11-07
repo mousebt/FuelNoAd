@@ -2,16 +2,11 @@ package com.fueltracker.app.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,15 +26,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.roundToInt
-
-enum class TrendTimeFilter(val label: String) {
-    LATEST_12("近12次"),
-    LATEST_24("近24次"),
-    HALF_YEAR("近半年"),
-    ONE_YEAR("近1年"),
-    ALL("全部")
-}
 
 @Composable
 fun FuelTrendChart(
@@ -55,27 +41,10 @@ fun FuelTrendChart(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            var selectedFilter by remember { mutableStateOf(TrendTimeFilter.LATEST_12) }
-            var expandedFilterDropdown by remember { mutableStateOf(false) }
-
-            val validRecords = remember(records, selectedFilter) {
-                // Chronological ascending: oldest first, newest last
-                val sorted = records.filter { it.calculatedConsumption != null }
+            // Keep all records chronologically sorted (oldest first, newest last)
+            val validRecords = remember(records) {
+                records.filter { it.calculatedConsumption != null }
                     .sortedWith(compareBy({ it.odometer }, { it.timestamp }))
-
-                when (selectedFilter) {
-                    TrendTimeFilter.LATEST_12 -> sorted.takeLast(12)
-                    TrendTimeFilter.LATEST_24 -> sorted.takeLast(24)
-                    TrendTimeFilter.HALF_YEAR -> {
-                        val halfYearAgo = System.currentTimeMillis() - 182L * 24 * 3600 * 1000
-                        sorted.filter { it.timestamp >= halfYearAgo }
-                    }
-                    TrendTimeFilter.ONE_YEAR -> {
-                        val oneYearAgo = System.currentTimeMillis() - 365L * 24 * 3600 * 1000
-                        sorted.filter { it.timestamp >= oneYearAgo }
-                    }
-                    TrendTimeFilter.ALL -> sorted
-                }
             }
 
             if (validRecords.size < 2) {
@@ -124,16 +93,15 @@ fun FuelTrendChart(
             val minVal = (rawMin - 0.6).coerceAtLeast(0.0)
             val maxVal = rawMax + 0.6
 
-            // Pan state
-            var scrollOffset by remember { mutableStateOf(0f) }
+            // Pan state (defaults to NEGATIVE_INFINITY to snap to the latest 12 items on rightmost end)
+            var scrollOffset by remember { mutableStateOf(Float.NEGATIVE_INFINITY) }
 
             // Selected point for inspection
             var selectedIndex by remember { mutableStateOf<Int?>(null) }
 
-            LaunchedEffect(validRecords) {
-                // Focus on the newest record by default
+            LaunchedEffect(validRecords.size) {
                 selectedIndex = null
-                scrollOffset = if (validRecords.size <= 12) 0f else -99999f
+                scrollOffset = Float.NEGATIVE_INFINITY
             }
 
             val activeRecord = if (selectedIndex != null && selectedIndex in validRecords.indices) {
@@ -145,7 +113,7 @@ fun FuelTrendChart(
             val dateFormat = remember { SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()) }
             val axisDateFormat = remember { SimpleDateFormat("MM/dd", Locale.getDefault()) }
 
-            // Header Row: Title & Filter
+            // Header Row: Title & Subtitle Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -167,44 +135,40 @@ fun FuelTrendChart(
                     )
                 }
 
-                // Time filter dropdown
-                Box {
-                    Row(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (validRecords.size > 12 && !scrollOffset.isInfinite() && scrollOffset > -1000f) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF10B981).copy(alpha = 0.12f))
+                                .clickable {
+                                    scrollOffset = Float.NEGATIVE_INFINITY
+                                    selectedIndex = validRecords.size - 1
+                                }
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "👉 回到最新",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+
+                    Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                            .clickable { expandedFilterDropdown = true }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = selectedFilter.label,
+                            text = "默认近12次 · 可左右拖动",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = expandedFilterDropdown,
-                        onDismissRequest = { expandedFilterDropdown = false }
-                    ) {
-                        TrendTimeFilter.values().forEach { filter ->
-                            DropdownMenuItem(
-                                text = { Text(filter.label) },
-                                onClick = {
-                                    selectedFilter = filter
-                                    expandedFilterDropdown = false
-                                }
-                            )
-                        }
                     }
                 }
             }
@@ -276,14 +240,16 @@ fun FuelTrendChart(
                                 val paddingLeft = 38.dp.toPx()
                                 val paddingRight = 20.dp.toPx()
                                 val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                // Exactly 12 points visible across availableW (11 intervals)
                                 val pointSpacing = if (validRecords.size <= 12) {
                                     availableW / (validRecords.size - 1).coerceAtLeast(1)
                                 } else {
-                                    42.dp.toPx()
+                                    availableW / 11f
                                 }
                                 val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
-                                val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
+                                val baseOffset = if (scrollOffset.isInfinite()) -maxScroll else scrollOffset
+                                val currentOffset = baseOffset.coerceIn(-maxScroll, 0f)
 
                                 var closestIdx = -1
                                 var minDiff = Float.MAX_VALUE
@@ -308,11 +274,12 @@ fun FuelTrendChart(
                                 val pointSpacing = if (validRecords.size <= 12) {
                                     availableW / (validRecords.size - 1).coerceAtLeast(1)
                                 } else {
-                                    42.dp.toPx()
+                                    availableW / 11f
                                 }
                                 val totalW = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
-                                scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
+                                val baseOffset = if (scrollOffset.isInfinite()) -maxScroll else scrollOffset
+                                scrollOffset = (baseOffset + dragAmount).coerceIn(-maxScroll, 0f)
                             }
                         }
                 ) {
@@ -325,19 +292,23 @@ fun FuelTrendChart(
                     val paddingLeft = 38.dp.toPx() // Room for Y-axis numbers
                     val paddingRight = 20.dp.toPx()
                     val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
+                    
+                    // Fixed 12-item visible scale: 12 data points span availableW exactly
                     val pointSpacing = if (validRecords.size <= 12) {
                         availableW / (validRecords.size - 1).coerceAtLeast(1)
                     } else {
-                        42.dp.toPx()
+                        availableW / 11f
                     }
 
                     val totalContentWidth = (validRecords.size - 1) * pointSpacing + paddingLeft + paddingRight
                     val maxScroll = (totalContentWidth - width).coerceAtLeast(0f)
 
-                    if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
-                    if (scrollOffset > 0f) scrollOffset = 0f
-
-                    val currentOffset = scrollOffset
+                    // Default to rightmost end (-maxScroll) to show latest 12 records
+                    val currentOffset = if (scrollOffset.isInfinite()) {
+                        -maxScroll
+                    } else {
+                        scrollOffset.coerceIn(-maxScroll, 0f)
+                    }
 
                     // Text Paints for Y-axis, X-axis, and Data Points
                     val yAxisPaint = android.graphics.Paint().apply {
@@ -462,7 +433,7 @@ fun FuelTrendChart(
                                         val r = validRecords[i]
 
                                         if (isSelected) {
-                                            // Vertical guideline (no outer halo ring)
+                                            // Vertical guideline
                                             drawLine(
                                                 color = Color(0xFF10B981).copy(alpha = 0.5f),
                                                 start = Offset(pt.x, paddingTop),
@@ -472,7 +443,7 @@ fun FuelTrendChart(
                                             )
                                         }
 
-                                        // Crisp Clean Dot (no big halo circle)
+                                        // Point Dot
                                         drawCircle(
                                             color = Color.White,
                                             radius = if (isSelected) 6.5f else 4.5f,
@@ -510,7 +481,7 @@ fun FuelTrendChart(
                 }
             }
 
-            // Legend & Extremes
+            // Legend & Extremes & Quick Jump
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -551,6 +522,49 @@ fun FuelTrendChart(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
+            }
+
+            if (validRecords.size > 12) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "👈 左右拖动浏览全部 ${validRecords.size} 笔记录 👉",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "最早",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF059669),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable {
+                                    scrollOffset = 0f
+                                    selectedIndex = 0
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                        Text(
+                            text = "最新",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF059669),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable {
+                                    scrollOffset = Float.NEGATIVE_INFINITY
+                                    selectedIndex = validRecords.size - 1
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
         }
     }

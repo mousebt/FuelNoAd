@@ -6,10 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,55 +19,32 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fueltracker.app.model.FuelRecord
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
-
-enum class MonthlyChartFilter(val label: String) {
-    LATEST_12("近12月"),
-    THIS_YEAR("今年"),
-    ALL("全部")
-}
 
 @Composable
 fun MonthlyExpenseChart(
     records: List<FuelRecord>,
     modifier: Modifier = Modifier
 ) {
-    var selectedFilter by remember { mutableStateOf(MonthlyChartFilter.LATEST_12) }
-    var expandedDropdown by remember { mutableStateOf(false) }
-
-    val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
-
-    val monthlyItems = remember(records, selectedFilter) {
-        val cal = Calendar.getInstance()
+    // Group records by yyyy-MM across all available records, sorted chronologically
+    val monthlyItems = remember(records) {
         val formatKey = SimpleDateFormat("yyyy-MM", Locale.getDefault())
         val formatLabel = SimpleDateFormat("M月", Locale.getDefault())
 
-        val allGrouped = records.groupBy { formatKey.format(Date(it.timestamp)) }
+        records.groupBy { formatKey.format(Date(it.timestamp)) }
             .map { (key, list) ->
                 val date = Date(list.first().timestamp)
-                val year = key.substring(0, 4)
-                Triple(key, "${formatLabel.format(date)}", list.sumOf { it.totalPrice })
+                Triple(key, formatLabel.format(date), list.sumOf { it.totalPrice })
             }
             .sortedBy { it.first } // Chronological ascending: oldest first, newest last
-
-        when (selectedFilter) {
-            MonthlyChartFilter.LATEST_12 -> allGrouped.takeLast(12)
-            MonthlyChartFilter.THIS_YEAR -> allGrouped.filter {
-                cal.timeInMillis = records.firstOrNull { r -> formatKey.format(Date(r.timestamp)) == it.first }?.timestamp ?: 0L
-                it.first.startsWith(currentYear.toString())
-            }
-            MonthlyChartFilter.ALL -> allGrouped
-        }
     }
 
     if (monthlyItems.isEmpty()) return
@@ -83,13 +57,13 @@ fun MonthlyExpenseChart(
         (monthlyItems.maxOf { it.third } * 1.25).coerceAtLeast(800.0)
     }
 
-    var scrollOffset by remember { mutableStateOf(0f) }
+    // Pan state (defaults to NEGATIVE_INFINITY to snap to latest 12 months)
+    var scrollOffset by remember { mutableStateOf(Float.NEGATIVE_INFINITY) }
     var selectedItemIndex by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(monthlyItems) {
-        // Default to focusing on the newest month
+    LaunchedEffect(monthlyItems.size) {
         selectedItemIndex = null
-        scrollOffset = if (monthlyItems.size <= 12) 0f else -99999f
+        scrollOffset = Float.NEGATIVE_INFINITY
     }
 
     Card(
@@ -121,43 +95,40 @@ fun MonthlyExpenseChart(
                     )
                 }
 
-                Box {
-                    Row(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (monthlyItems.size > 12 && !scrollOffset.isInfinite() && scrollOffset > -1000f) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF10B981).copy(alpha = 0.12f))
+                                .clickable {
+                                    scrollOffset = Float.NEGATIVE_INFINITY
+                                    selectedItemIndex = monthlyItems.size - 1
+                                }
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "👉 回到最新",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+
+                    Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                            .clickable { expandedDropdown = true }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = selectedFilter.label,
+                            text = "默认近12月 · 可左右拖动",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = expandedDropdown,
-                        onDismissRequest = { expandedDropdown = false }
-                    ) {
-                        MonthlyChartFilter.values().forEach { filter ->
-                            DropdownMenuItem(
-                                text = { Text(filter.label) },
-                                onClick = {
-                                    selectedFilter = filter
-                                    expandedDropdown = false
-                                }
-                            )
-                        }
                     }
                 }
             }
@@ -178,14 +149,16 @@ fun MonthlyExpenseChart(
                                 val paddingLeft = 36.dp.toPx()
                                 val paddingRight = 16.dp.toPx()
                                 val availableW = (size.width.toFloat() - paddingLeft - paddingRight).coerceAtLeast(100f)
+                                // Exactly 12 columns visible across availableW
                                 val slotW = if (monthlyItems.size <= 12) {
                                     availableW / monthlyItems.size.coerceAtLeast(1)
                                 } else {
-                                    42.dp.toPx()
+                                    availableW / 12f
                                 }
                                 val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
-                                val currentOffset = scrollOffset.coerceIn(-maxScroll, 0f)
+                                val baseOffset = if (scrollOffset.isInfinite()) -maxScroll else scrollOffset
+                                val currentOffset = baseOffset.coerceIn(-maxScroll, 0f)
 
                                 val idx = ((tapOffset.x - currentOffset - paddingLeft) / slotW).toInt()
                                 if (idx in monthlyItems.indices) {
@@ -201,11 +174,12 @@ fun MonthlyExpenseChart(
                                 val slotW = if (monthlyItems.size <= 12) {
                                     availableW / monthlyItems.size.coerceAtLeast(1)
                                 } else {
-                                    42.dp.toPx()
+                                    availableW / 12f
                                 }
                                 val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                                 val maxScroll = (totalW - size.width.toFloat()).coerceAtLeast(0f)
-                                scrollOffset = (scrollOffset + dragAmount).coerceIn(-maxScroll, 0f)
+                                val baseOffset = if (scrollOffset.isInfinite()) -maxScroll else scrollOffset
+                                scrollOffset = (baseOffset + dragAmount).coerceIn(-maxScroll, 0f)
                             }
                         }
                 ) {
@@ -217,18 +191,24 @@ fun MonthlyExpenseChart(
                     val paddingLeft = 36.dp.toPx()
                     val paddingRight = 16.dp.toPx()
                     val availableW = (width - paddingLeft - paddingRight).coerceAtLeast(100f)
+                    
+                    // Fixed 12-item visible scale: 12 bars span availableW exactly
                     val slotW = if (monthlyItems.size <= 12) {
                         availableW / monthlyItems.size.coerceAtLeast(1)
                     } else {
-                        42.dp.toPx()
+                        availableW / 12f
                     }
-                    val barW = (slotW * 0.52f).coerceIn(14f, 30f)
+                    val barW = (slotW * 0.52f).coerceIn(14f, 28f)
 
                     val totalW = monthlyItems.size * slotW + paddingLeft + paddingRight
                     val maxScroll = (totalW - width).coerceAtLeast(0f)
-                    if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
-                    if (scrollOffset > 0f) scrollOffset = 0f
-                    val currentOffset = scrollOffset
+                    
+                    // Default to rightmost end (-maxScroll) to show latest 12 months
+                    val currentOffset = if (scrollOffset.isInfinite()) {
+                        -maxScroll
+                    } else {
+                        scrollOffset.coerceIn(-maxScroll, 0f)
+                    }
 
                     val yAxisPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.GRAY
@@ -261,82 +241,67 @@ fun MonthlyExpenseChart(
                         }
                     }
 
-                    // Draw Average dashed red line
+                    // Draw Monthly Average Reference Line (Red / Orange Dashed)
                     if (avgMonthlyExpense > 0) {
-                        val avgY = paddingTop + graphHeight - ((avgMonthlyExpense / maxAmount) * graphHeight).toFloat()
+                        val avgRatio = (avgMonthlyExpense / maxAmount).toFloat().coerceIn(0f, 1f)
+                        val avgY = paddingTop + graphHeight - (avgRatio * graphHeight)
                         drawLine(
-                            color = Color(0xFFF43F5E).copy(alpha = 0.8f),
+                            color = Color(0xFFE11D48).copy(alpha = 0.8f),
                             start = Offset(paddingLeft - 4f, avgY),
                             end = Offset(width, avgY),
                             strokeWidth = 2f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
                         )
-
-                        // Draw avg label on right using native paint
-                        val paint = android.graphics.Paint().apply {
-                            color = android.graphics.Color.parseColor("#F43F5E")
-                            textSize = 22f
-                            textAlign = android.graphics.Paint.Align.RIGHT
-                            isAntiAlias = true
-                            isFakeBoldText = true
-                        }
-                        drawIntoCanvas { canvas ->
-                            canvas.nativeCanvas.drawText(
-                                "月均 ${String.format(Locale.US, "%.0f", avgMonthlyExpense)}",
-                                width - 8f,
-                                avgY - 6f,
-                                paint
-                            )
-                        }
                     }
 
-                    // Draw Bars, Top Amounts, and Bottom Month Labels (Clipped to prevent bleeding over Y-axis)
-                    val textPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.DKGRAY
-                        textSize = 21f
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isAntiAlias = true
-                    }
-
-                    val labelPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.GRAY
-                        textSize = 20f
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isAntiAlias = true
-                    }
-
+                    // Draw Bars & Labels (Clipped to prevent bleeding over Y-axis)
                     clipRect(left = paddingLeft - 2f, top = 0f, right = width + 10f, bottom = height) {
-                        monthlyItems.forEachIndexed { i, (_, label, amount) ->
-                            val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
-                            if (centerX >= -barW && centerX <= width + barW) {
-                                val barH = ((amount / maxAmount) * graphHeight).toFloat().coerceAtLeast(4f)
-                                val topY = paddingTop + graphHeight - barH
+                        drawIntoCanvas { canvas ->
+                            val textPaint = android.graphics.Paint().apply {
+                                color = android.graphics.Color.DKGRAY
+                                textSize = 18f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                            }
 
-                                // Vibrant Pink / Rose color like reference screenshot
-                                val barColor = Color(0xFFF43F5E)
+                            val valPaint = android.graphics.Paint().apply {
+                                color = android.graphics.Color.parseColor("#E11D48")
+                                textSize = 18f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isFakeBoldText = true
+                                isAntiAlias = true
+                            }
 
-                                drawRoundRect(
-                                    color = barColor,
-                                    topLeft = Offset(centerX - barW / 2, topY),
-                                    size = Size(barW, barH),
-                                    cornerRadius = CornerRadius(6f, 6f)
-                                )
+                            monthlyItems.forEachIndexed { i, item ->
+                                val centerX = paddingLeft + i * slotW + (slotW / 2) + currentOffset
+                                if (centerX >= -barW && centerX <= width + barW) {
+                                    val isSelected = (selectedItemIndex == i) || (selectedItemIndex == null && i == monthlyItems.size - 1)
+                                    val barH = ((item.third / maxAmount) * graphHeight).toFloat().coerceAtLeast(6f)
+                                    val topY = paddingTop + graphHeight - barH
 
-                                drawIntoCanvas { canvas ->
-                                    // Top amount
-                                    canvas.nativeCanvas.drawText(
-                                        amount.roundToInt().toString(),
-                                        centerX,
-                                        topY - 8f,
-                                        textPaint
+                                    // Bar Rect
+                                    val barColor = if (isSelected) Color(0xFFE11D48) else Color(0xFFE11D48).copy(alpha = 0.45f)
+                                    drawRoundRect(
+                                        color = barColor,
+                                        topLeft = Offset(centerX - barW / 2, topY),
+                                        size = Size(barW, barH),
+                                        cornerRadius = CornerRadius(6f, 6f)
                                     )
 
-                                    // Bottom month label
+                                    // Amount text on top
                                     canvas.nativeCanvas.drawText(
-                                        label,
+                                        "¥${item.third.roundToInt()}",
+                                        centerX,
+                                        topY - 6f,
+                                        valPaint
+                                    )
+
+                                    // Month label below
+                                    canvas.nativeCanvas.drawText(
+                                        item.second,
                                         centerX,
                                         height - 4f,
-                                        labelPaint
+                                        textPaint
                                     )
                                 }
                             }
@@ -345,27 +310,98 @@ fun MonthlyExpenseChart(
                 }
             }
 
-            // Year indicator dot
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Legend
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF43F5E))
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "${currentYear}年",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFFE11D48))
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("月度支出 (元)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFFE11D48).copy(alpha = 0.5f))
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("月均参考: ¥${avgMonthlyExpense.roundToInt()}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+                }
+
+                val activeMonth = if (selectedItemIndex != null && selectedItemIndex in monthlyItems.indices) {
+                    monthlyItems[selectedItemIndex!!]
+                } else {
+                    monthlyItems.lastOrNull()
+                }
+
+                if (activeMonth != null) {
+                    Text(
+                        text = "${activeMonth.first}: ¥${activeMonth.third.roundToInt()}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE11D48)
+                    )
+                }
+            }
+
+            if (monthlyItems.size > 12) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "👈 左右拖动浏览全部 ${monthlyItems.size} 个月 👉",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "最早",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE11D48),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable {
+                                    scrollOffset = 0f
+                                    selectedItemIndex = 0
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                        Text(
+                            text = "最新",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE11D48),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable {
+                                    scrollOffset = Float.NEGATIVE_INFINITY
+                                    selectedItemIndex = monthlyItems.size - 1
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
         }
     }
